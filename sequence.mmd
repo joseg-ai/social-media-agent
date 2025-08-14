@@ -1,0 +1,52 @@
+sequenceDiagram
+    participant U as User
+    participant UI as Web App (UI)
+    participant API as Backend API
+    participant ING as Ingestion/Summarization
+    participant TRE as Trend Engine
+    participant GEN as Content Generation
+    participant MOD as Guardrails
+    participant SCH as Scheduler
+    participant PUB as Publisher
+    participant DB as DB/Blob
+    participant PL as Platforms (LinkedIn/X/Facebook)
+
+    U->>UI: Connect RSS/URLs, set interests & voice
+    UI->>API: Save profile & sources
+    API->>DB: Persist profile & sources
+    API->>ING: Fetch & summarize sources
+    ING->>DB: Store summaries & keywords
+
+    API->>TRE: Build interest graph + trend signals
+    TRE->>DB: Store topic scores
+
+    API->>GEN: Generate platform-specific drafts
+    GEN->>DB: Store drafts + value scores
+
+    UI->>API: Request preview queue
+    API->>DB: Read drafts + scores
+    API-->>UI: Return candidates (10–20)
+
+    U->>UI: Edit or Approve posts
+    UI->>API: Submit approvals/edits
+    API->>MOD: Check compliance & guardrails
+    MOD-->>API: Pass/Fail
+    alt Pass
+        API->>SCH: Compute optimal times/cadence
+        SCH->>DB: Save schedule
+        API-->>UI: Show calendar & queue
+        U->>UI: Publish/Auto-approve
+        UI->>API: Confirm publish
+        API->>PUB: Dispatch posts
+        PUB->>PL: Post via API / Buffer
+        PL-->>PUB: Post IDs/Status
+        PUB->>DB: Persist delivery receipts
+    else Fail
+        API-->>UI: Flag & request edits
+    end
+
+    PL-->>API: Engagement metrics
+    API->>DB: Store telemetry
+    API->>TRE: Update topic weights
+    API->>SCH: Adjust timing heuristics
+    API-->>UI: Analytics dashboard & insights 

@@ -7,17 +7,21 @@
  *   - Falls through to the `timing_advisor` LLM prompt only for ambiguous cases
  *   - Returns a validated { action, schedule_for?, reason } decision
  *
- * Settings keys (read from DB, defaults documented below):
- *   posting_window_start_hour  — integer UTC hour, default 9  (09:00 UTC)
- *   posting_window_end_hour    — integer UTC hour, default 17 (17:00 UTC)
- *   max_posts_per_day          — integer, default 2
- *   min_gap_hours              — number, default 4
+ * Settings keys (read from DB, canonical shape defined in schema.ts):
+ *   posting_windows      — JSONB { days: number[], startHour: number, endHour: number, tz: string }
+ *                          days: JS weekday numbers 0(Sun)–6(Sat); empty array = every day allowed
+ *                          startHour/endHour: UTC hours 0–23 (end exclusive); supports midnight wrap
+ *                          tz: informational label — all comparisons are UTC
+ *   max_posts_per_day    — number (default: 1)
+ *   min_gap_hours        — number (default: 20)
+ *   jitter_minutes       — number (default: 30) — random offset added to schedule_for outputs
  *
  * Pre-flight order (each check short-circuits without an LLM call):
- *   1. daily cap reached          → skip
- *   2. last post within min gap   → schedule_for (last_post_at + min_gap_hours)
- *   3. outside posting window     → schedule_for (next window open)
- *   4. ambiguous (all clear)      → LLM decides
+ *   1. daily cap reached            → skip
+ *   2. last post within min gap     → schedule_for (last_post_at + min_gap_hours + jitter)
+ *   3. outside allowed weekdays     → schedule_for (next allowed day at window start + jitter)
+ *   4. outside posting window       → schedule_for (next window open + jitter)
+ *   5. ambiguous (all clear)        → LLM decides
  *
  * Public API:
  *   getPostingContext(opts?)    → TimingContext
@@ -34,17 +38,36 @@ import { getActivePrompt, renderPrompt } from "@/lib/prompts";
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
 const DEFAULTS = {
-  posting_window_start_hour: 9,  // 09:00 UTC
-  posting_window_end_hour: 17,   // 17:00 UTC
-  max_posts_per_day: 2,
-  min_gap_hours: 4,
+  /** posting_windows mirrors the schema.ts JSONB shape. */
+  posting_windows: {
+    days: [1, 2, 3, 4, 5] as number[], // Mon–Fri (JS weekday: 0=Sun … 6=Sat)
+    startHour: 9,
+    endHour: 17,
+    tz: "UTC",
+  },
+  max_posts_per_day: 1,
+  min_gap_hours: 20,
+  jitter_minutes: 30,
 } as const;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface PostingWindow {
-  start_hour: number; // UTC hour (0–23)
-  end_hour: number;   // UTC hour (0–23), exclusive
+  /** UTC hour when window opens (0–23). */
+  start_hour: number;
+  /**
+   * UTC hour when window closes (exclusive, 0–23).
+   * Midnight-wrapping is supported: when start_hour > end_hour the window
+   * spans midnight (e.g., start=22 end=6 means 22:00–06:00 UTC).
+   */
+  end_hour: number;
+  /**
+   * JS weekday numbers that are allowed for posting (0=Sun … 6=Sat).
+   * An empty array means every day is allowed.
+   */
+  days: number[];
+  /** Timezone label (informational; all comparisons use UTC). */
+  tz: string;
 }
 
 export interface TimingContext {
@@ -54,6 +77,8 @@ export interface TimingContext {
   /** Null if no post has been published yet. */
   last_post_at: Date | null;
   min_gap_hours: number;
+  /** Random jitter in minutes applied to schedule_for outputs (0 = no jitter). */
+  jitter_minutes: number;
   current_datetime: Date;
 }
 
@@ -117,9 +142,54 @@ async function readNumericSetting(
     .limit(1);
 
   if (rows.length === 0) return defaultValue;
-  const val = rows[0].value;
-  if (typeof val === "number" && isFinite(val)) return val;
-  return defaultValue;
+  const num = Number(rows[0].value);
+  return isFinite(num) ? num : defaultValue;
+}
+
+/** Shape of the `posting_windows` JSONB value stored in the settings table. */
+interface PostingWindowsDB {
+  days?: number[];
+  startHour?: number;
+  endHour?: number;
+  tz?: string;
+}
+
+/** Read the `posting_windows` JSONB object from settings, falling back to defaults. */
+async function readPostingWindows(): Promise<PostingWindow> {
+  const rows = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(eq(settings.key, "posting_windows"))
+    .limit(1);
+
+  const v = rows[0]?.value as PostingWindowsDB | undefined;
+  return {
+    start_hour: v?.startHour ?? DEFAULTS.posting_windows.startHour,
+    end_hour: v?.endHour ?? DEFAULTS.posting_windows.endHour,
+    days: Array.isArray(v?.days) ? v.days : [...DEFAULTS.posting_windows.days],
+    tz: v?.tz ?? DEFAULTS.posting_windows.tz,
+  };
+}
+
+/**
+ * Returns true if `hour` falls inside the posting window [start, end).
+ * Handles midnight-wrapping when start > end (e.g., start=22 end=6).
+ */
+function isInsideWindow(hour: number, start: number, end: number): boolean {
+  if (start <= end) {
+    return hour >= start && hour < end;
+  }
+  // Midnight-wrapping: inside when hour >= start OR hour < end
+  return hour >= start || hour < end;
+}
+
+/**
+ * Add random jitter (0 … jitter_minutes) to a target Date and return ISO string.
+ * Jitter of 0 returns an exact time (useful for deterministic tests).
+ */
+function withJitter(target: Date, jitterMinutes: number): string {
+  const offsetMs = jitterMinutes > 0 ? Math.random() * jitterMinutes * 60_000 : 0;
+  return new Date(target.getTime() + offsetMs).toISOString();
 }
 
 /** UTC midnight for the given date (start of the UTC day). */
@@ -142,17 +212,11 @@ export async function getPostingContext(
   _opts?: { topic?: string }
 ): Promise<TimingContext> {
   // ── Read settings (all run concurrently) ──────────────────────────────────
-  const [startHour, endHour, maxPerDay, minGap] = await Promise.all([
-    readNumericSetting(
-      "posting_window_start_hour",
-      DEFAULTS.posting_window_start_hour
-    ),
-    readNumericSetting(
-      "posting_window_end_hour",
-      DEFAULTS.posting_window_end_hour
-    ),
+  const [postingWindow, maxPerDay, minGap, jitterMins] = await Promise.all([
+    readPostingWindows(),
     readNumericSetting("max_posts_per_day", DEFAULTS.max_posts_per_day),
     readNumericSetting("min_gap_hours", DEFAULTS.min_gap_hours),
+    readNumericSetting("jitter_minutes", DEFAULTS.jitter_minutes),
   ]);
 
   const now = new Date();
@@ -183,11 +247,12 @@ export async function getPostingContext(
   const lastPostAt = lastRow[0]?.postedAt ?? null;
 
   return {
-    posting_window: { start_hour: startHour, end_hour: endHour },
+    posting_window: postingWindow,
     max_posts_per_day: maxPerDay,
     posts_today_count: postsTodayCount,
     last_post_at: lastPostAt,
     min_gap_hours: minGap,
+    jitter_minutes: jitterMins,
     current_datetime: now,
   };
 }
@@ -224,34 +289,65 @@ export function applyPreflightChecks(ctx: TimingContext): TimingDecision | null 
     const elapsedMs = now.getTime() - ctx.last_post_at.getTime();
     const gapMs = ctx.min_gap_hours * 60 * 60 * 1000;
     if (elapsedMs < gapMs) {
-      const scheduleFor = new Date(ctx.last_post_at.getTime() + gapMs);
+      const target = new Date(ctx.last_post_at.getTime() + gapMs);
       return {
         action: "schedule_for",
-        schedule_for: scheduleFor.toISOString(),
+        schedule_for: withJitter(target, ctx.jitter_minutes),
         reason: `min gap of ${ctx.min_gap_hours}h not met (${(elapsedMs / 3600000).toFixed(1)}h elapsed since last post)`,
       };
     }
   }
 
-  // 3. Outside posting window (UTC hours, end_hour is exclusive)
-  const currentHour = now.getUTCHours();
-  const { start_hour, end_hour } = ctx.posting_window;
+  const { start_hour, end_hour, days } = ctx.posting_window;
 
-  if (currentHour < start_hour || currentHour >= end_hour) {
-    let nextWindow: Date;
-    if (currentHour < start_hour) {
-      // Still today — window hasn't opened yet
-      nextWindow = new Date(now);
-      nextWindow.setUTCHours(start_hour, 0, 0, 0);
-    } else {
-      // Past today's window — open tomorrow
-      nextWindow = new Date(now);
-      nextWindow.setUTCDate(now.getUTCDate() + 1);
-      nextWindow.setUTCHours(start_hour, 0, 0, 0);
+  // 3. Outside allowed weekdays (empty days array = every day allowed)
+  const currentDay = now.getUTCDay(); // 0=Sun … 6=Sat
+  if (days.length > 0 && !days.includes(currentDay)) {
+    // Find the soonest allowed weekday
+    let daysUntilNext = 1;
+    while (daysUntilNext <= 7) {
+      if (days.includes((currentDay + daysUntilNext) % 7)) break;
+      daysUntilNext++;
     }
+    const nextWindow = new Date(now);
+    nextWindow.setUTCDate(now.getUTCDate() + daysUntilNext);
+    nextWindow.setUTCHours(start_hour, 0, 0, 0);
     return {
       action: "schedule_for",
-      schedule_for: nextWindow.toISOString(),
+      schedule_for: withJitter(nextWindow, ctx.jitter_minutes),
+      reason: `today (UTC weekday ${currentDay}) is not an allowed posting day`,
+    };
+  }
+
+  // 4. Outside posting window (supports midnight-wrapping when start_hour > end_hour)
+  const currentHour = now.getUTCHours();
+
+  if (!isInsideWindow(currentHour, start_hour, end_hour)) {
+    let nextWindow: Date;
+
+    if (start_hour <= end_hour) {
+      // Normal window (e.g., 09–17)
+      if (currentHour < start_hour) {
+        // Window hasn't opened yet today
+        nextWindow = new Date(now);
+        nextWindow.setUTCHours(start_hour, 0, 0, 0);
+      } else {
+        // Past today's window — open tomorrow
+        nextWindow = new Date(now);
+        nextWindow.setUTCDate(now.getUTCDate() + 1);
+        nextWindow.setUTCHours(start_hour, 0, 0, 0);
+      }
+    } else {
+      // Midnight-wrapping window (e.g., 22–06).
+      // Outside = end_hour <= currentHour < start_hour (daytime gap).
+      // Next open is today at start_hour.
+      nextWindow = new Date(now);
+      nextWindow.setUTCHours(start_hour, 0, 0, 0);
+    }
+
+    return {
+      action: "schedule_for",
+      schedule_for: withJitter(nextWindow, ctx.jitter_minutes),
       reason: `outside posting window (${start_hour}:00–${end_hour}:00 UTC, current UTC hour: ${currentHour})`,
     };
   }

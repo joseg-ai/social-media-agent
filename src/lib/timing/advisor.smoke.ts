@@ -9,13 +9,17 @@
  * with valid Azure OpenAI credentials and a seeded `timing_advisor` prompt).
  *
  * Pre-flight scenarios covered:
- *   A. Daily cap reached       → skip
- *   B. Min gap not met         → schedule_for (last_post_at + min_gap_hours)
- *   C. Outside window (before) → schedule_for (same day, window start)
- *   D. Outside window (after)  → schedule_for (next day, window start)
- *   E. All clear               → null (LLM would decide)
- *   F. Exactly at cap          → skip
- *   G. Exactly at gap boundary → null (LLM would decide — gap just elapsed)
+ *   A. Daily cap reached            → skip
+ *   B. Min gap not met              → schedule_for (last_post_at + min_gap_hours)
+ *   C. Outside window (before)      → schedule_for (same day, window start)
+ *   D. Outside window (after)       → schedule_for (next day, window start)
+ *   E. All clear                    → null (LLM would decide)
+ *   F. Exactly at cap               → skip
+ *   G. Exactly at gap boundary      → null (LLM would decide — gap just elapsed)
+ *   H. Midnight edge (23:59 UTC)    → schedule_for (next day, window start)
+ *   I. Midnight-wrapping window     → null when inside (23:00 in 22–06 window)
+ *   J. Midnight-wrapping window     → schedule_for when outside (10:00 in 22–06 window)
+ *   K. Day not allowed (Sunday)     → schedule_for (next Mon at window start)
  */
 
 import { applyPreflightChecks, decidePostingAction } from "./advisor";
@@ -39,15 +43,20 @@ function assert(label: string, condition: boolean, detail?: string) {
 /**
  * Build a synthetic TimingContext with sensible defaults.
  * Callers override only the fields relevant to the scenario under test.
+ *
+ * Defaults align with schema.ts canonical values:
+ *   max_posts_per_day: 1, min_gap_hours: 20, posting_windows Mon–Fri 09–17 UTC.
+ * jitter_minutes is 0 so schedule_for times are deterministic in tests.
  */
 function ctx(overrides: Partial<TimingContext> = {}): TimingContext {
   return {
-    posting_window: { start_hour: 9, end_hour: 17 },
-    max_posts_per_day: 2,
+    posting_window: { start_hour: 9, end_hour: 17, days: [1, 2, 3, 4, 5], tz: "UTC" },
+    max_posts_per_day: 1,
     posts_today_count: 0,
     last_post_at: null,
-    min_gap_hours: 4,
-    // Default: 12:00 UTC on an arbitrary date (inside the 09–17 window)
+    min_gap_hours: 20,
+    jitter_minutes: 0, // deterministic for tests
+    // 2026-06-11 is a Thursday (UTC weekday 4) — inside Mon–Fri window
     current_datetime: new Date("2026-06-11T12:00:00.000Z"),
     ...overrides,
   };
@@ -134,10 +143,9 @@ console.log("\nScenario D — outside window (current hour 22:00 UTC, window 09�
 console.log("\nScenario E — all clear (within window, gap met, under cap):");
 {
   const now = new Date("2026-06-11T12:00:00.000Z");
-  const lastPost = new Date(now.getTime() - 6 * 3600 * 1000); // 6h ago — gap met
-
+  // last_post_at = null → no gap check; posts_today_count=0 → under cap of 1
   const decision = applyPreflightChecks(
-    ctx({ current_datetime: now, last_post_at: lastPost, posts_today_count: 1 })
+    ctx({ current_datetime: now, last_post_at: null, posts_today_count: 0 })
   );
   assert("returns null (LLM should decide)", decision === null);
 }
@@ -157,7 +165,7 @@ console.log("\nScenario F — exactly at cap boundary:");
 console.log("\nScenario G — gap exactly elapsed (no remaining gap):");
 {
   const now = new Date("2026-06-11T12:00:00.000Z");
-  // last post was exactly 4h ago → gap just met → should fall through to LLM
+  // last post was exactly 4h ago, explicit min_gap_hours: 4 → gap just met → LLM
   const lastPost = new Date(now.getTime() - 4 * 3600 * 1000);
 
   const decision = applyPreflightChecks(
@@ -178,6 +186,65 @@ console.log("\nScenario H — edge case: 23:59 UTC with window 09–17:");
   assert(
     "schedule_for is next day at 09:00 UTC",
     sf.getUTCHours() === 9 && sf.toISOString().startsWith("2026-06-12"),
+    `got ${sf.toISOString()}`
+  );
+}
+
+// ── Scenario I: Midnight-wrapping window — inside at 23:00 ───────────────────
+
+console.log("\nScenario I — midnight-wrapping window (22–06): current hour 23:00 → inside:");
+{
+  // 23:00 UTC is inside a 22:00–06:00 window
+  const now = new Date("2026-06-11T23:00:00.000Z");
+  const decision = applyPreflightChecks(
+    ctx({
+      current_datetime: now,
+      posting_window: { start_hour: 22, end_hour: 6, days: [1, 2, 3, 4, 5], tz: "UTC" },
+    })
+  );
+  assert("returns null (inside midnight-wrap window → LLM path)", decision === null);
+}
+
+// ── Scenario J: Midnight-wrapping window — outside at 10:00 ──────────────────
+
+console.log("\nScenario J — midnight-wrapping window (22–06): current hour 10:00 → outside:");
+{
+  // 10:00 UTC is outside a 22:00–06:00 window (daytime gap)
+  const now = new Date("2026-06-11T10:00:00.000Z");
+  const decision = applyPreflightChecks(
+    ctx({
+      current_datetime: now,
+      posting_window: { start_hour: 22, end_hour: 6, days: [1, 2, 3, 4, 5], tz: "UTC" },
+    })
+  );
+  assert("returns schedule_for", decision?.action === "schedule_for");
+
+  const sf = new Date(decision?.schedule_for ?? "");
+  assert(
+    "schedule_for is today at 22:00 UTC",
+    sf.getUTCHours() === 22 && sf.toISOString().startsWith("2026-06-11"),
+    `got ${sf.toISOString()}`
+  );
+}
+
+// ── Scenario K: Day-of-week not allowed ───────────────────────────────────────
+
+console.log("\nScenario K — Sunday (UTC weekday 0) not in allowed days [1–5]:");
+{
+  // 2026-06-14 is a Sunday (UTC weekday 0) — not in Mon–Fri
+  const now = new Date("2026-06-14T12:00:00.000Z");
+  const decision = applyPreflightChecks(ctx({ current_datetime: now }));
+  assert("returns schedule_for", decision?.action === "schedule_for");
+  assert(
+    "reason mentions allowed posting day",
+    (decision?.reason ?? "").includes("not an allowed posting day")
+  );
+
+  // Next allowed day is Monday 2026-06-15 at 09:00 UTC
+  const sf = new Date(decision?.schedule_for ?? "");
+  assert(
+    "schedule_for is next Monday at 09:00 UTC",
+    sf.getUTCHours() === 9 && sf.toISOString().startsWith("2026-06-15"),
     `got ${sf.toISOString()}`
   );
 }

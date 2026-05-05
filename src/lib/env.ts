@@ -1,4 +1,4 @@
-﻿import { z } from "zod";
+import { z } from "zod";
 
 const envSchema = z.object({
   // ── Database ────────────────────────────────────────────────────────────────
@@ -30,6 +30,11 @@ const envSchema = z.object({
     .string()
     .min(32, "SESSION_SECRET must be at least 32 characters when set")
     .optional(),
+
+  // ── Scoring ──────────────────────────────────────────────────────────────────
+  // Minimum relevance score (0-100) an article must reach to be marked "scored".
+  // Articles below this threshold are marked "rejected".
+  RELEVANCE_THRESHOLD: z.coerce.number().min(0).max(100).default(70),
 
   // ── App ─────────────────────────────────────────────────────────────────────
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

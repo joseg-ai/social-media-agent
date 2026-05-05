@@ -145,3 +145,26 @@ Currently logged to `console.log("[llm_usage]", ...)`.  WI-18 replaces the `emit
 
 Added `AZURE_OPENAI_API_VERSION` (default: `"2024-10-21"`) to `src/lib/env.ts`.
 
+
+
+### 2026-05-05 — WI-07: LLM-powered article relevance scorer — PR #15
+
+**Status:** Complete — PR #15 open, branch `squad/wi-07-relevance-scorer` pushed.
+
+**What was built:**
+- `src/lib/scoring/relevance.ts` — core scorer: `scoreArticle(id)` + `scoreUnscoredArticles(opts?)`
+- `src/lib/scoring/index.ts` — public re-exports
+- `src/lib/scoring/relevance.smoke.ts` — RUN_LLM_SMOKE=1 gated smoke test
+- `src/db/migrations/0001_article_status.sql` — `article_status` enum + `status` column + index
+- Schema: `articleStatusEnum` + `articles.status` column + `articles_status_idx`
+- `RELEVANCE_THRESHOLD` env var (default 70) in `src/lib/env.ts`
+
+**Key design decisions:**
+- Score normalisation: v1 `relevance_scorer` prompt returns 0.0-1.0; scorer multiplies by 100 when `score <= 1.0`. Future prompts returning 0-100 integers pass through unchanged.
+- Accepts both `reasoning` (v1) and `reason` field names via Zod refine.
+- Flows through `chatJSON → chat → emitUsageLog` (WI-18 token tracking). No direct LLM calls.
+- `scoreUnscoredArticles` wraps each article in try/catch — one failure never aborts the batch.
+- No scheduler — WI-06 cron runner calls `scoreUnscoredArticles`.
+- `master_context` loaded from `settings` table; falls back to `""` with `console.warn` if absent.
+
+**Shared workspace note:** Concurrent oracle agent sessions (WI-06/WI-08/WI-09) sharing this working directory repeatedly reset git state, deleting files and switching branches. Commit was eventually made atomically with `git add <explicit paths>` + `git commit -- <explicit paths>`.

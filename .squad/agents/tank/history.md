@@ -102,3 +102,11 @@ db:studio     drizzle-kit studio            # GUI schema explorer (dev only)
 3. **`unique()` vs column-level `.unique()`** — used column-level `.unique()` for single-column constraints and table-level `unique()` for composite constraints. Drizzle generates both correctly.
 4. **HMR singleton pattern** — `src/db/index.ts` uses `globalThis` to cache the db instance across Next.js hot reloads in dev, preventing connection pool exhaustion.
 
+### 2026-05-05 — PR #7 (WI-19 LinkedIn OAuth) rebased onto main; schema.ts merged successfully
+
+**Rebase pattern:** During parallel development, PR #7 was opened with a soft-import partial `src/db/schema.ts` (oauth_tokens table only) before PR #6 (full Drizzle schema) merged. After PR #6 merged to main, PR #7 was merged with main to adopt the full schema wholesale. All OAuth column requirements verified present in the final schema.
+
+**Unused columns:** The oauth_tokens table in main's schema contains redundant `iv` and `auth_tag` columns at table level. These are left unused by design because encryption is self-contained per column using the format `iv:ciphertext:authTag`. Decision note filed locally at `.squad/decisions/inbox/tank-pr-7-rebase.md`.
+
+**Build verification:** npm run lint exits 0, npm run build exits 0. PR #7 ready for review.
+

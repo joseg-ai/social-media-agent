@@ -23,6 +23,9 @@
 - **Blocker 2 (env var missing):** `AZURE_OPENAI_API_VERSION` was never added to `src/lib/env.ts` Zod schema; code read `env.AZURE_OPENAI_API_VERSION` at runtime undefined, falling back to undocumented SDK default. Added `z.string().default("2024-10-21")` to schema; updated `.env.example` to document it.
 - **Lesson:** When feature branches merge sibling in-flight branches' work, dependencies and schema changes can silently drop if git history isn't clean. Watch for orphaned imports and runtime undefined errors when integrating branches in parallel. Commit verified with `npm run lint && npm run build` both exit 0.
 
+### 2026-05-05 — PR #4 (WI-03 Azure OpenAI client) rebased onto main post-#6 merge
+- **Rebase result:** Clean merge with no file conflicts. Git auto-merged package.json/package-lock.json correctly; openai@^6.36.0 preserved. env.ts additive merge: both Azure OpenAI vars (from WI-03) and LinkedIn/Dashboard vars (from main) retained. schema.ts and db/index.ts now on main's 7-table version. Build + lint both exit 0. PR comment posted confirming ready to merge.
+
 ### 2026-05-05 — WI-02: PostgreSQL schema & initial migration
 
 **Branch:** `squad/wi-02-drizzle-schema` | **PR:** https://github.com/joseg-ai/social-media-agent/pull/6

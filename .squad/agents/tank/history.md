@@ -7,6 +7,19 @@
 
 ## Learnings
 
+### 2026-05-06 — WI-08 revision (PR #13): timing advisor schema alignment
+
+Took over from Oracle (reviewer-rejection lockout) to fix the Switch-blocked PR.
+
+- **Settings key mismatch (blocker):** advisor.ts was reading non-existent scalar keys `posting_window_start_hour` / `posting_window_end_hour`. The canonical schema (schema.ts lines 271–276) defines a single `posting_windows` JSONB object `{ days, startHour, endHour, tz }`. Fixed via a new `readPostingWindows()` helper — one DB round-trip, clean fallback to defaults.
+- **Default alignment:** `max_posts_per_day` 2→1, `min_gap_hours` 4→20, matching schema.ts comment block. `jitter_minutes` (default 30) now read from DB and applied to all `schedule_for` outputs via `withJitter()`.
+- **Midnight-wrapping windows:** `isInsideWindow(hour, start, end)` uses `||` logic when `start > end` (e.g., 22:00–06:00). Outside = daytime gap; next open is today at `start_hour`.
+- **Day-of-week check:** `posting_window.days[]` (JS weekdays 0=Sun…6=Sat) now a first-class pre-flight step. Empty array = every day allowed. Fires before the hour check.
+- **`readNumericSetting` narrowing:** `Number(val)` + `isFinite()` instead of `typeof val === 'number'` — correctly handles JSON strings like `"4"` stored by the future settings UI.
+- **WI-23 contract:** `posting_windows` JSONB key is now the single source of truth; Trinity has an unambiguous target to write to.
+- **Smoke test:** 21/21 pre-flight assertions. New scenarios I/J (midnight-wrap inside/outside) and K (day-not-allowed → next allowed weekday). `jitter_minutes: 0` in `ctx()` keeps all schedule_for assertions deterministic.
+- **PR:** https://github.com/joseg-ai/social-media-agent/pull/13
+
 ### 2026-05-05 — WI-06: Cron job runner + pg advisory locks (feed poll)
 
 Built the scheduling layer in `src/lib/jobs/`. Key decisions and learnings:

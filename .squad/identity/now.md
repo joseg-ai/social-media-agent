@@ -1,24 +1,23 @@
 # Now
 
-**Last updated:** 2026-05-04 (Jose signed off — resume tomorrow)
+**Last updated:** 2026-05-05 (WI-01 PR #3 in review)
 
 ## What's live
-- Repo: https://github.com/joseg-ai/social-media-agent (synced to origin/main, commit cb6fe5c)
+- Repo: https://github.com/joseg-ai/social-media-agent (squad/1-wi-01-project-foundation branch)
 - PRD v0.2: docs/PRD.md
 - Work plan: docs/work-items.md (23 WIs, 4 waves)
 - Architectural spikes resolved: docs/decisions/2026-05-04-architecture-spikes.md
   - ORM: Drizzle, Job runner: node-cron+pg locks, LLM: openai SDK + AzureOpenAI, Encryption: AES-256-GCM
 
 ## Wave 1 status
-- 🤖 @copilot — Issue #1 WI-01 (project foundation) — assigned, not started. **Blocks all of Wave 1.**
-- 🤖 @copilot — Issue #2 WI-13 (auth gate) — assigned, depends on WI-01.
-- ⏸️ Tank — WI-02 (schema), WI-19 (LinkedIn OAuth) — waiting on WI-01
-- ⏸️ Oracle — WI-03 (Azure OpenAI client) — waiting on WI-01
+- ✅ Tank — WI-01 (project foundation) — **PR #3 in review by Switch**. Lint + build clean. https://github.com/joseg-ai/social-media-agent/pull/3
+- ⏳ Tank — WI-02 (schema), WI-19 (LinkedIn OAuth) — queued, unblocks when PR #3 merges
+- ⏳ Oracle — WI-03 (Azure OpenAI client) — queued, unblocks when PR #3 merges
+- ⏳ Trinity — WI-13 (async job submission) — queued, unblocks when PR #3 merges
 
-## Resume tomorrow with one of:
-- "Status" / "Where are we?" — instant catch-up
-- "Ralph, go" — auto-monitor @copilot's PR, fan-out Tank+Oracle when WI-01 lands
-- "Check on @copilot" — manual peek at issues #1 and #2
+## Resume with
+- "Status" — instant catch-up on Wave 1 progress
+- "Review PR #3" — Switch to review WI-01 delivery
+- "Merge PR #3" — move to main, unblock Tank/Oracle/Trinity
 
-## Open question parked
-Whether to activate Ralph (B), wait for @copilot WI-01 PR (A), or pre-stage Tank/Oracle on stubs (C). Default recommendation: B (Ralph).
+## Next: Switch review + merge WI-01, then Wave 1 parallel execution

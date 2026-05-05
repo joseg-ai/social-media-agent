@@ -12,3 +12,8 @@
 - **Work items:** 23 tracked at `docs/work-items.md` — you own prompt engineering (draft generation system prompt is at .squad/decisions/decisions.md)
 - **IDs you own:** Intelligence wave (prompt design, draft generation, ranking algorithm)
 - **Reference:** .squad/decisions/decisions.md contains master prompt (Q7) and all resolved decisions (Q1-Q9)
+
+### 2026-05-05 — WI-01 Foundation PR #3 pending
+- **Status:** Tank delivered WI-01 foundation. PR #3 under review by Switch.
+- **Your unblock:** Once PR #3 merges, you are unblocked for **WI-03** (LLM client factory).
+- **Dependency:** WI-01 establishes env schema, Drizzle ORM, and async job infrastructure.

@@ -54,6 +54,17 @@
 - **API limitation:** `gh pr review --approve` rejected (cannot approve own-org PR). Review comment posted instead.
 - **Decision file:** `.squad/decisions/inbox/switch-pr-10-review.md`
 
+### 2026-05-05 — WI-09 Draft Generator PR #12 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Oracle's WI-09 draft generator is functionally correct for single-user MVP.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/12
+- **What was verified:** sanitizeBody unit-tested (null bytes, ZWJ, bold, italic, headings, NBSP preserved ✅), char-limit spread `[...body]` counts code points not UTF-16 units ✅, 2999+1=3000 boundary correct ✅, state='draft' hard-coded ✅, article set to 'selected' after success ✅, chat() emitUsageLog path not bypassed ✅, batch try/catch per article ✅, lint clean ✅, build clean ✅.
+- **Schema migration:** `0001_article_status.sql` adds `article_status` ENUM + `articles.status DEFAULT 'new' NOT NULL` — backwards-compatible with existing rows ✅. Not idempotent (no `IF NOT EXISTS`), acceptable for drizzle-managed workflow.
+- **Issues found:**
+  - MEDIUM (`schema.ts`, posts table): Missing `unique()` on `posts.article_id` — TOCTOU race window between SELECT-check and INSERT. No DB-level guard against duplicate posts per article. Recommend adding in WI-11 when Tank touches the posts table.
+  - MEDIUM (`generator.ts:231-245`): No transaction wrapping post INSERT + article status UPDATE. Crash between the two leaves article permanently at `status='scored'` with an orphaned post. Fix: `db.transaction()` around both statements.
+  - INFO (`generator.ts:203`): `chat()` called before post INSERT, so `llm_calls.postId` is always NULL for draft calls. FK exists but unused for this case.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-12-wi-09.md`
+
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.
 - **`gh pr review --approve` fails on self-owned PRs** — always fall back to `--comment` and record the verdict in the decisions inbox. This is a GitHub API constraint, not a workflow bug.

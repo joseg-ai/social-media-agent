@@ -7,6 +7,19 @@
 
 ## Learnings
 
+### 2026-05-05 — WI-05: Feed source CRUD service + API routes
+
+Built the full CRUD service layer and API routes for `feed_sources` in `src/lib/feeds/`. Key decisions:
+
+- **Hard delete:** Schema has `onDelete: "cascade"` on `articles.feed_source_id` — confirmed hard delete intent. Soft-disable via `PATCH { isActive: false }` covers the pause use case.
+- **Duplicate URL guard:** `createFeedSource` SELECT-before-INSERT; throws `DuplicateFeedSourceError` (carries existing row) → API returns HTTP 409 with the conflicting record so callers get the ID without a second request.
+- **`isActive` → `enabled` mapping:** Service API uses `isActive` per spec; DB column is `enabled`. Mapping is explicit in `updateFeedSource` and `createFeedSource`.
+- **Auth:** Existing middleware from WI-13 already gates `/api/feeds/*` — no changes needed.
+- **`SKIP_ENV_VALIDATION`:** Already wired into `env.ts` on main from WI-19. Build with `SKIP_ENV_VALIDATION=1 npm run build` → exits 0.
+- **Smoke test:** `src/lib/feeds/sources.smoke.ts` — 9-step lifecycle (create → dedup check → list → get → update → list-active → list-all → delete → verify gone). Tolerant of DB-unavailable.
+
+### 2026-05-05 — WI-04: RSS feed parser + ingestion service
+
 ### 2026-05-05 — WI-04: RSS feed parser + ingestion service
 
 Built the RSS ingestion module in `src/lib/feeds/`. Chose `rss-parser` (de-facto Node.js standard, ships its own TypeScript types, handles RSS 2.0 + Atom transparently). `parseFeed(url)` normalises feed items into `ParsedArticle` with `contentHash` (SHA-256 of title+summary, matching the schema column). `ingestFeed(feedSourceId)` bulk-inserts via Drizzle's `.onConflictDoNothing().returning()` so the inserted/skipped counts are exact with a single DB round-trip per run — no N+1 SELECT per article. Error contract: network/parse failures are caught and written to `last_error_message` (returns `{0,0}`); DB errors rethrow so programmer mistakes surface loudly. Smoke test verified against `hnrss.org/frontpage` — parsed 20 articles. Cron scheduling intentionally deferred to WI-06. Decision note filed at `.squad/decisions/inbox/tank-wi-04-rss.md`.

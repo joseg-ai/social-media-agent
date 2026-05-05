@@ -39,9 +39,11 @@
 
 Replaced the `emitUsageLog` console.log stub in `src/lib/llm/chat.ts` with an async DB INSERT into `llm_calls`. The WI-03 contract (`deployment`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `latency_ms`, `request_id`) is preserved exactly — field mapping is internal (`deployment→model`, `latency_ms→durationMs`). Extended `UsageLogEntry` with optional `article_id`, `post_id`, `prompt_id` FK fields for future agent callers; backward-compatible (zero existing callers break). The insert is fire-and-forget (`void`), wrapped in try/catch with a `[llm_calls insert failed]` tagged `console.error` — usage logging can never crash an LLM call. Added `src/lib/llm/usage.ts` with `getUsageInRange(start, end)` and `getTotalTokensInRange(start, end)` aggregation helpers (powers WI-17 dashboard), plus `usage.smoke.ts` that exercises insert+query and gracefully skips when DB is unavailable.
 
-### 2026-05-05 — WI-10 Prompt management system shipped
+### 2026-05-05 — Cross-domain revision: PR #11 (WI-05 feed source CRUD, Tank's work)
 
-**Branch:** `squad/wi-10-prompt-management`
+Per team protocol, Tank is locked out after Switch's rejection; Oracle handled the revision. Two blockers addressed: (1) `deleteFeedSource` now pre-checks post count via a `posts → articles` JOIN and throws `FeedSourceHasPostsError` (→ DELETE route 409) rather than letting Postgres's `posts.article_id RESTRICT` FK produce an unhandled 500 — the schema is unchanged, RESTRICT stays as the data-safety guard; (2) both `createFeedSource` and `updateFeedSource` now wrap their INSERT/UPDATE in try/catch and convert Postgres error code `23505` (unique_violation) to `DuplicateFeedSourceError`, closing the SELECT→INSERT race window that was returning 500 and making the PATCH route's existing 409 branch live code. Smoke test extended with steps 10–12 to exercise all three new paths. Lint and build green.
+
+
 **PR:** [WI-10: Prompt management system](https://github.com/joseg-ai/social-media-agent/pull/8)
 
 #### Location choice: `src/lib/prompts/index.ts`

@@ -7,7 +7,19 @@
 
 ## Learnings
 
-### 2026-05-04 — PRD v0.2 approved-pending-Jose; work items documented
+### 2026-05-05 — WI-05: Feed source CRUD service + API routes
+
+Built the full CRUD service layer and API routes for `feed_sources` in `src/lib/feeds/`. Key decisions:
+
+- **Hard delete:** Schema has `onDelete: "cascade"` on `articles.feed_source_id` — confirmed hard delete intent. Soft-disable via `PATCH { isActive: false }` covers the pause use case.
+- **Duplicate URL guard:** `createFeedSource` SELECT-before-INSERT; throws `DuplicateFeedSourceError` (carries existing row) → API returns HTTP 409 with the conflicting record so callers get the ID without a second request.
+- **`isActive` → `enabled` mapping:** Service API uses `isActive` per spec; DB column is `enabled`. Mapping is explicit in `updateFeedSource` and `createFeedSource`.
+- **Auth:** Existing middleware from WI-13 already gates `/api/feeds/*` — no changes needed.
+- **`SKIP_ENV_VALIDATION`:** Already wired into `env.ts` on main from WI-19. Build with `SKIP_ENV_VALIDATION=1 npm run build` → exits 0.
+- **Smoke test:** `src/lib/feeds/sources.smoke.ts` — 9-step lifecycle (create → dedup check → list → get → update → list-active → list-all → delete → verify gone). Tolerant of DB-unavailable.
+
+### 2026-05-05 — WI-04: RSS feed parser + ingestion service
+
 - **PRD status:** v0.2 locked, awaiting Jose approval before Wave 1 begins
 - **Work items:** 23 tracked at `docs/work-items.md` — you own database schema and ORM spike resolution
 - **IDs you own:** Foundation wave (schema design, migrations, feed_sources table, prompts table, llm_calls table for token tracking)

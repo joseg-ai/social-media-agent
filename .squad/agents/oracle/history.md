@@ -12,8 +12,57 @@
 - **Work items:** 23 tracked at `docs/work-items.md` — you own prompt engineering (draft generation system prompt is at .squad/decisions/decisions.md)
 - **IDs you own:** Intelligence wave (prompt design, draft generation, ranking algorithm)
 - **Reference:** .squad/decisions/decisions.md contains master prompt (Q7) and all resolved decisions (Q1-Q9)
+
+### 2026-05-05 — WI-10 Prompt management system shipped
 
-### 2026-05-05 — WI-03 Azure OpenAI typed client wrapper shipped
+**Branch:** `squad/wi-10-prompt-management`
+**PR:** [WI-10: Prompt management system](https://github.com/joseg-ai/social-media-agent/pull/8)
+
+#### Location choice: `src/lib/prompts/index.ts`
+
+Service layer lives in `@/lib/prompts`, not `@/agents/`, because it's shared library code consumed by both agents (WI-07/08/09) and the API routes backing Trinity's dashboard (WI-16). Agents import it; they don't own it.
+
+#### API surface
+
+| Export | Kind | Description |
+|--------|------|-------------|
+| `getActivePrompt(name, promptType)` | async fn | Fetch active version for a named key. Throws `PromptNotFoundError`. |
+| `getPromptById(id)` | async fn | Fetch any version by UUID. |
+| `listPrompts()` | async fn | All versions, all types — sorted name → type → version desc. |
+| `listPromptHistory(name, promptType)` | async fn | All versions for one key, newest first. |
+| `createPromptVersion(input)` | async fn | Append-only versioning. Atomic deactivate+activate via transaction. |
+| `activatePromptVersion(id)` | async fn | Atomic swap / rollback to any prior version. |
+| `renderPrompt(prompt, vars)` | fn | `{{variable_name}}` interpolation. Throws `PromptRenderError` on missing vars. |
+| `Prompt`, `PromptType`, `CreatePromptVersionInput` | types | Public contract for consumers. |
+| `PromptNotFoundError`, `PromptRenderError` | classes | Typed errors. |
+
+#### `getActivePrompt` signature uses (name, promptType) not just a key string
+
+The work plan said `key: string` but the schema uses a composite (name, promptType) as the logical identifier. Keeping both required makes it type-safe — you can't accidentally load a `scoring` prompt where a `drafting` prompt is expected. The string-key pattern would require consumers to do their own type-checking downstream.
+
+#### Seeded prompt keys
+
+| Key | Type | For | Required variables |
+|-----|------|-----|--------------------|
+| `relevance_scorer` | `scoring` | WI-07 | `{{master_context}}`, `{{article_title}}`, `{{article_summary}}`, `{{article_url}}`, `{{feed_name}}` |
+| `timing_advisor` | `timing` | WI-08 | `{{master_context}}`, `{{current_datetime}}`, `{{posting_window}}`, `{{max_posts_per_day}}`, `{{last_post_at}}`, `{{min_gap_hours}}`, `{{post_topic}}` |
+| `draft_generator` | `drafting` | WI-09 | `{{master_context}}`, `{{article_url}}`, `{{article_title}}`, `{{article_summary}}` |
+
+`draft_generator` body is the verbatim master prompt from decisions.md Q7 with article-specific variables added.
+
+#### Why isActive flag instead of "latest version always wins"
+
+"Latest wins" requires deleting the bad version to roll back — that destroys the audit trail. `isActive` flag means rollback is a single UPDATE: flip the bad version's flag to false, flip the target version's flag to true, in one transaction. Jose can look at the history and see exactly which version was live at any point. Trinity's dashboard (WI-16) will surface this as a full version list with timestamps.
+
+#### renderPrompt placeholder syntax
+
+`{{variable_name}}` — word characters only (a–z, A–Z, 0–9, underscore), case-sensitive, no spaces inside braces. `PromptRenderError` lists ALL missing vars in one throw, not just the first.
+
+#### Seed and smoke scripts
+
+`seed.ts` uses a standalone postgres connection (not `@/db`) so it only requires `DATABASE_URL` — no other env vars. Idempotent. `smoke.ts` exercises create → list → activate → render with a standalone connection. Deletes its test rows on completion.
+
+
 
 **Branch:** `squad/wi-03-azure-openai-client`
 **PR:** WI-03: Azure OpenAI typed client wrapper

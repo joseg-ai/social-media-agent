@@ -1,4 +1,4 @@
-import { z } from "zod";
+﻿import { z } from "zod";
 
 const envSchema = z.object({
   // ── Database ────────────────────────────────────────────────────────────────
@@ -9,6 +9,8 @@ const envSchema = z.object({
   AZURE_OPENAI_DEPLOYMENT: z.string().min(1, "AZURE_OPENAI_DEPLOYMENT is required"),
   // Optional in production — Managed Identity is used when this is absent.
   AZURE_OPENAI_API_KEY: z.string().optional(),
+  // API version for Azure OpenAI SDK. Defaults to 2024-10-21 (GA stable).
+  AZURE_OPENAI_API_VERSION: z.string().default("2024-10-21"),
 
   // ── LinkedIn OAuth ──────────────────────────────────────────────────────────
   LINKEDIN_CLIENT_ID: z.string().min(1, "LINKEDIN_CLIENT_ID is required"),
@@ -17,7 +19,7 @@ const envSchema = z.object({
   // 32-byte base64 key for AES-256-GCM. Generate: openssl rand -base64 32
   LINKEDIN_TOKEN_ENCRYPTION_KEY: z
     .string()
-    .min(44, "LINKEDIN_TOKEN_ENCRYPTION_KEY must be a 32-byte base64 string (≥44 chars)"),
+    .min(44, "LINKEDIN_TOKEN_ENCRYPTION_KEY must be a 32-byte base64 string (>=44 chars)"),
 
   // ── Dashboard ───────────────────────────────────────────────────────────────
   DASHBOARD_PASSWORD: z.string().min(8, "DASHBOARD_PASSWORD must be at least 8 characters"),
@@ -34,14 +36,18 @@ const envSchema = z.object({
   APP_BASE_URL: z.string().url("APP_BASE_URL must be a valid URL"),
 });
 
-const result = envSchema.safeParse(process.env);
-
-if (!result.success) {
-  const formatted = result.error.issues
-    .map((issue) => `  • ${issue.path.join(".")}: ${issue.message}`)
-    .join("\n");
-  throw new Error(`❌ Invalid environment variables:\n${formatted}`);
+// Set SKIP_ENV_VALIDATION=1 to bypass validation in CI builds where env vars
+// are injected at runtime rather than build time.
+if (!process.env.SKIP_ENV_VALIDATION) {
+  const result = envSchema.safeParse(process.env);
+  if (!result.success) {
+    const formatted = result.error.issues
+      .map((issue) => `  * ${issue.path.join(".")}: ${issue.message}`)
+      .join("\n");
+    throw new Error(`Invalid environment variables:\n${formatted}`);
+  }
 }
 
-export const env = result.data;
+const result = envSchema.safeParse(process.env);
+export const env = (result.success ? result.data : process.env) as z.infer<typeof envSchema>;
 export type Env = typeof env;

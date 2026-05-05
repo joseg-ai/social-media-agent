@@ -21,6 +21,14 @@ import {
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
 
+/** Lifecycle state of an ingested article through the scoring pipeline. */
+export const articleStatusEnum = pgEnum("article_status", [
+  "new",       // freshly ingested, not yet scored
+  "scored",    // passed relevance threshold — eligible for drafting
+  "rejected",  // scored below threshold — will not be drafted
+  "selected",  // chosen for a LinkedIn post (draft created)
+]);
+
 /** State machine for LinkedIn posts. `posting` is the idempotency gate. */
 export const postStateEnum = pgEnum("post_state", [
   "draft",
@@ -85,7 +93,9 @@ export const articles = pgTable(
     author: text("author"),
     /** Full parsed feed entry stored for debugging/re-processing. */
     rawMetadata: jsonb("raw_metadata"),
-    /** Relevance score 0.0–1.0. Null until the scoring agent runs. */
+    /** Lifecycle status — set by the scoring agent. Default 'new'. */
+    status: articleStatusEnum("status").notNull().default("new"),
+    /** Relevance score 0–100. Null until the scoring agent runs. */
     relevanceScore: real("relevance_score"),
     scoringReasoning: text("scoring_reasoning"),
     scoredAt: timestamp("scored_at", { withTimezone: true }),
@@ -97,6 +107,7 @@ export const articles = pgTable(
     index("articles_feed_source_id_idx").on(t.feedSourceId),
     index("articles_published_at_idx").on(t.publishedAt),
     index("articles_relevance_score_idx").on(t.relevanceScore),
+    index("articles_status_idx").on(t.status),
     index("articles_created_at_idx").on(t.createdAt),
     // Belt-and-suspenders dedup: unique on both URL (above) + content hash pair
     unique("articles_url_content_hash_uq").on(t.url, t.contentHash),

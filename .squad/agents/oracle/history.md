@@ -32,6 +32,13 @@
 - **IDs you own:** Intelligence wave (prompt design, draft generation, ranking algorithm)
 - **Reference:** .squad/decisions/decisions.md contains master prompt (Q7) and all resolved decisions (Q1-Q9)
 
+### 2026-05-05 — WI-18 Token usage tracking (DB persistence layer) shipped
+
+**Branch:** `squad/wi-18-token-usage`
+**PR:** WI-18: token usage tracking via llm_calls inserts
+
+Replaced the `emitUsageLog` console.log stub in `src/lib/llm/chat.ts` with an async DB INSERT into `llm_calls`. The WI-03 contract (`deployment`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `latency_ms`, `request_id`) is preserved exactly — field mapping is internal (`deployment→model`, `latency_ms→durationMs`). Extended `UsageLogEntry` with optional `article_id`, `post_id`, `prompt_id` FK fields for future agent callers; backward-compatible (zero existing callers break). The insert is fire-and-forget (`void`), wrapped in try/catch with a `[llm_calls insert failed]` tagged `console.error` — usage logging can never crash an LLM call. Added `src/lib/llm/usage.ts` with `getUsageInRange(start, end)` and `getTotalTokensInRange(start, end)` aggregation helpers (powers WI-17 dashboard), plus `usage.smoke.ts` that exercises insert+query and gracefully skips when DB is unavailable.
+
 ### 2026-05-05 — WI-10 Prompt management system shipped
 
 **Branch:** `squad/wi-10-prompt-management`

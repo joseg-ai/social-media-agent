@@ -27,7 +27,10 @@ export interface ChatResult {
 
 /**
  * Structured token-usage log entry emitted after every LLM call.
- * Shape is intentionally flat so WI-18 can INSERT it directly into llm_calls.
+ * Shape is intentionally flat — maps directly to llm_calls columns.
+ *
+ * Optional FK fields (article_id, post_id, prompt_id) are backward-compatible:
+ * existing callers that don't pass them simply omit them.
  */
 export interface UsageLogEntry {
   deployment: string;
@@ -36,15 +39,35 @@ export interface UsageLogEntry {
   total_tokens: number;
   latency_ms: number;
   request_id: string | null;
+  // Optional FK references — omit when the call isn't tied to a specific entity
+  article_id?: string | null;
+  post_id?: string | null;
+  prompt_id?: string | null;
 }
 
 // ── Internal helpers ──────────────────────────────────────────────────────────
 
-function emitUsageLog(entry: UsageLogEntry): void {
-  // TODO (WI-18): replace this console.log with a DB INSERT into llm_calls
-  // once Tank's WI-02 schema lands.  The entry shape is the final contract —
-  // Tank should match the llm_calls column names to these keys.
-  console.log("[llm_usage]", JSON.stringify(entry));
+/**
+ * Fire-and-forget DB insert into llm_calls.
+ * Failure is logged but never propagated — usage logging must never crash a call.
+ */
+async function emitUsageLog(entry: UsageLogEntry): Promise<void> {
+  try {
+    const { db } = await import("@/db");
+    const { llmCalls } = await import("@/db/schema");
+    await db.insert(llmCalls).values({
+      model: entry.deployment,
+      promptTokens: entry.prompt_tokens,
+      completionTokens: entry.completion_tokens,
+      totalTokens: entry.total_tokens,
+      durationMs: entry.latency_ms,
+      ...(entry.article_id != null ? { articleId: entry.article_id } : {}),
+      ...(entry.post_id != null ? { postId: entry.post_id } : {}),
+      ...(entry.prompt_id != null ? { promptId: entry.prompt_id } : {}),
+    });
+  } catch (err) {
+    console.error("[llm_calls insert failed]", err);
+  }
 }
 
 // ── chat ─────────────────────────────────────────────────────────────────────
@@ -92,7 +115,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResult> {
       totalTokens: response.usage?.total_tokens ?? 0,
     };
 
-    emitUsageLog({
+    void emitUsageLog({
       deployment,
       prompt_tokens: usage.promptTokens,
       completion_tokens: usage.completionTokens,
@@ -156,7 +179,7 @@ export async function* chatStream(
       }
     }
 
-    emitUsageLog({
+    void emitUsageLog({
       deployment,
       prompt_tokens: promptTokens,
       completion_tokens: completionTokens,

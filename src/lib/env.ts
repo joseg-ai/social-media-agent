@@ -21,6 +21,13 @@ const envSchema = z.object({
 
   // ── Dashboard ───────────────────────────────────────────────────────────────
   DASHBOARD_PASSWORD: z.string().min(8, "DASHBOARD_PASSWORD must be at least 8 characters"),
+  // Optional: separate HMAC signing secret for session cookies.
+  // If absent, DASHBOARD_PASSWORD is used as the signing key.
+  // Generate: openssl rand -base64 32
+  SESSION_SECRET: z
+    .string()
+    .min(32, "SESSION_SECRET must be at least 32 characters when set")
+    .optional(),
 
   // ── App ─────────────────────────────────────────────────────────────────────
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),

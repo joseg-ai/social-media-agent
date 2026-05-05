@@ -65,6 +65,14 @@
   - INFO (`generator.ts:203`): `chat()` called before post INSERT, so `llm_calls.postId` is always NULL for draft calls. FK exists but unused for this case.
 - **Decision file:** `.squad/decisions/inbox/switch-pr-12-wi-09.md`
 
+### 2026-05-05 — WI-07 Relevance Scorer PR #15 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES (rebase required before merge).
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/15
+- **What was verified:** Schema migration (`NOT NULL DEFAULT 'new'` correct for existing rows ✅), JSON parse robustness (`chatJSON` safeParse → `AppError` throw → per-article catch in batch → `failed++` ✅), threshold default (`RELEVANCE_THRESHOLD: z.coerce.number().default(70)` in env.ts ✅), batch failure isolation (per-article try/catch ✅), idempotency (UPDATE not INSERT, batch filters `status='new'` ✅), token usage (`chatJSON→chat→emitUsageLog` ✅), prompt rendering (`getActivePrompt + renderPrompt + master_context fallback ✅), lint + build clean ✅.
+- **Blocker found:** PR #12 (WI-09) merged into `main` before this PR. WI-09 included WI-07's `0001_article_status.sql` and `schema.ts` changes as a dependency. Merging WI-07's branch to current `main` will conflict on schema.ts (enum comment wording, index ordering) and the migration file (whitespace). **Oracle must rebase on main** — after rebase, the duplicate files vanish from the diff; only `src/lib/scoring/`, env.ts RELEVANCE_THRESHOLD remain.
+- **Minor notes:** `normaliseScore(1)` ambiguity for future integer prompts (documented, non-blocking), no status guard on direct `scoreArticle` calls (informational), `schemaDescription` system message says 0-100 while v1 prompt returns 0-1 (low risk).
+- **Decision file:** `.squad/decisions/inbox/switch-pr-15-wi-07.md`
+
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.
 - **`gh pr review --approve` fails on self-owned PRs** — always fall back to `--comment` and record the verdict in the decisions inbox. This is a GitHub API constraint, not a workflow bug.

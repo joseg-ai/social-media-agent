@@ -72,6 +72,19 @@
 - **Blocker found:** PR #12 (WI-09) merged into `main` before this PR. WI-09 included WI-07's `0001_article_status.sql` and `schema.ts` changes as a dependency. Merging WI-07's branch to current `main` will conflict on schema.ts (enum comment wording, index ordering) and the migration file (whitespace). **Oracle must rebase on main** — after rebase, the duplicate files vanish from the diff; only `src/lib/scoring/`, env.ts RELEVANCE_THRESHOLD remain.
 - **Minor notes:** `normaliseScore(1)` ambiguity for future integer prompts (documented, non-blocking), no status guard on direct `scoreArticle` calls (informational), `schemaDescription` system message says 0-100 while v1 prompt returns 0-1 (low risk).
 - **Decision file:** `.squad/decisions/inbox/switch-pr-15-wi-07.md`
+### 2026-05-06 — WI-08 Timing Advisor PR #13 re-reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Tank fixed the original blocker (scalar key mismatch).
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/13
+- **Original blocker resolved:** `readPostingWindows()` reads canonical `'posting_windows'` JSONB key. No leftover scalar reads. Defaults aligned (`max_posts_per_day=1`, `min_gap_hours=20`). ✅
+- **Midnight-wrap verified:** `isInsideWindow(hour, start, end)` — all 5 mental tests pass. Scenarios I/J smoke-tested ✅.
+- **Jitter applied:** Pre-flight `schedule_for` outputs all get `withJitter(target, ctx.jitter_minutes)`. LLM path Zod-validated. ✅
+- **Days allowlist:** Weekday check (step 3) runs before hour window. `daysUntilNext` loop finds next allowed day. Scenario K (Sunday → Monday) ✅.
+- **Lint + build:** Both exit 0 ✅.
+- **Notes (non-blocking):**
+  - N1: Jitter not applied to LLM-returned `schedule_for` (intentional? — recommend JSDoc)
+  - N2: JSONB cast without Zod parse — wrong-type stored values degrade silently to `schedule_for`; fix in WI-23
+  - N3: `daysUntilNext` exits at 8 if all days invalid (malformed data only)
+- **Decision file:** `.squad/decisions/inbox/switch-pr-13-rereview.md`
 
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.

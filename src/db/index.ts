@@ -1,37 +1,33 @@
-﻿/**
- * Database layer — Drizzle ORM client and schema re-exports.
+/**
+ * Drizzle ORM client — postgres-js driver, connection pool, schema re-exports.
  *
- * WI-19 note: schema.ts on this branch is a partial soft-import (oauth_tokens
- * only). After PR #6 (WI-02) merges, schema.ts will be replaced with the full
- * 7-table schema and this client will continue to work unchanged.
- *
- * HMR singleton pattern: cache the db instance on globalThis to prevent
- * connection pool exhaustion across Next.js hot-module reloads in dev.
- *
- * Lazy initialization: the postgres pool does not actually connect until the
- * first query, so module import is safe even without DATABASE_URL at build time.
+ * Uses a module-level singleton to survive Next.js HMR reloads in development
+ * without exhausting Postgres connection limits.
  */
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
+import { env } from "@/lib/env";
 import * as schema from "./schema";
 
-type DrizzleDb = ReturnType<typeof drizzle<typeof schema>>;
-
-declare global {
-  var __db: DrizzleDb | undefined;
+function createClient() {
+  const sql = postgres(env.DATABASE_URL, {
+    max: 10,
+    idle_timeout: 20,
+    connect_timeout: 10,
+  });
+  return drizzle(sql, { schema });
 }
 
-function createDb(): DrizzleDb {
-  // Postgres is lazy — the pool connects on the first query, not at construction.
-  // This allows the module to be imported safely at build time without DATABASE_URL.
-  const client = postgres(process.env.DATABASE_URL ?? "", { max: 10 });
-  return drizzle(client, { schema });
-}
+// In development, re-use a single instance across HMR reloads.
+const globalForDb = globalThis as unknown as {
+  db: ReturnType<typeof createClient> | undefined;
+};
 
-export const db = globalThis.__db ?? createDb();
+export const db = globalForDb.db ?? createClient();
 
 if (process.env.NODE_ENV !== "production") {
-  globalThis.__db = db;
+  globalForDb.db = db;
 }
 
+export type DB = typeof db;
 export * from "./schema";

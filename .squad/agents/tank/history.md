@@ -60,6 +60,18 @@ Three API routes + three lib modules covering the full OAuth authorization code 
 #### env.ts change
 
 Added `SKIP_ENV_VALIDATION=1` support. Required for CI builds where env vars are injected at runtime. Standard T3-stack pattern. No breaking change — validation still runs in dev/prod when the flag is absent.
+### 2026-05-05 — PR #7 (WI-19 LinkedIn OAuth) rebased onto main; schema.ts merged
+- **Rebase pattern:** During parallel work, opened PR #7 with soft-import partial schema (oauth_tokens only); after PR #6 (full Drizzle schema) merged to main, merged main into PR #7 to adopt the full schema wholesale. All OAuth columns verified present in the full schema from PR #6.
+- **Unused columns:** oauth_tokens table has redundant iv/auth_tag columns (left unused — encryption stored inside encryptedAccessToken/encryptedRefreshToken in 'iv:ciphertext:authTag' format). Decision note filed at .squad/decisions/inbox/tank-pr-7-rebase.md.
+- **Build status:** npm run build + npm run lint both exit 0. PR ready for review.
+
+### 2026-05-05 — PR #4 (WI-03 Azure OpenAI client) revision applied; branch-bleed root cause
+- **Blocker 1 (openai dep missing):** During WI-02 schema work, a rebase/merge cycle caused WI-03's `package.json` addition to be silently dropped from `squad/wi-03-azure-openai-client` — `node_modules/openai` didn't exist despite code importing from it. Re-applied `npm install openai@6.36.0 --save`.
+- **Blocker 2 (env var missing):** `AZURE_OPENAI_API_VERSION` was never added to `src/lib/env.ts` Zod schema; code read `env.AZURE_OPENAI_API_VERSION` at runtime undefined, falling back to undocumented SDK default. Added `z.string().default("2024-10-21")` to schema; updated `.env.example` to document it.
+- **Lesson:** When feature branches merge sibling in-flight branches' work, dependencies and schema changes can silently drop if git history isn't clean. Watch for orphaned imports and runtime undefined errors when integrating branches in parallel. Commit verified with `npm run lint && npm run build` both exit 0.
+
+### 2026-05-05 — PR #4 (WI-03 Azure OpenAI client) rebased onto main post-#6 merge
+- **Rebase result:** Clean merge with no file conflicts. Git auto-merged package.json/package-lock.json correctly; openai@^6.36.0 preserved. env.ts additive merge: both Azure OpenAI vars (from WI-03) and LinkedIn/Dashboard vars (from main) retained. schema.ts and db/index.ts now on main's 7-table version. Build + lint both exit 0. PR comment posted confirming ready to merge.
 
 ### 2026-05-05 — WI-02: PostgreSQL schema & initial migration
 

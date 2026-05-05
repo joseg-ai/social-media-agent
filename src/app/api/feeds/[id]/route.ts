@@ -4,6 +4,7 @@ import {
   updateFeedSource,
   deleteFeedSource,
   DuplicateFeedSourceError,
+  FeedSourceHasPostsError,
 } from "@/lib/feeds/sources";
 import { updateFeedSourceSchema } from "@/lib/feeds/validators";
 
@@ -74,6 +75,16 @@ export async function DELETE(
     }
     return new NextResponse(null, { status: 204 });
   } catch (err) {
+    if (err instanceof FeedSourceHasPostsError) {
+      return NextResponse.json(
+        {
+          error: "FeedSourceHasPostsError",
+          message: `Feed source has ${err.postCount} posts. Set isActive=false to disable instead.`,
+          postCount: err.postCount,
+        },
+        { status: 409 },
+      );
+    }
     console.error(`[DELETE /api/feeds/${id}]`, err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

@@ -21,6 +21,17 @@
 
 ## Learnings
 
+### 2026-05-05 — WI-10 Prompt Management PR #8 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Oracle's WI-10 prompt service is solid for single-user operation.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/8
+- **What was verified:** Transaction wrapping on activate-swap (both `createPromptVersion` and `activatePromptVersion` use `db.transaction()`), render correctness (`PromptRenderError` thrown on missing vars, extras silently ignored, whitespace preserved), seed idempotency (checks `isActive=true` before insert), API surface alignment with WI-07/08/09 (composite key, typed errors, all public types exported), schema alignment with `prompts` table in `schema.ts`.
+- **Issues found:**
+  - MEDIUM (`index.ts:180`): `listPromptHistory` called outside transaction — version number race under concurrent writes. No unique constraint on `(name, promptType, version)` to catch it. Fix before WI-16 multi-user dashboard.
+  - LOW (`seed.ts:191`): Seed idempotency check uses `isActive=true` only; deactivated-then-re-seed creates duplicate v1.
+  - INFO (`smoke.ts`): Smoke test reimplements service logic inline, doesn't call production functions.
+- **API limitation:** `gh pr review --approve` rejected (cannot approve own-org PR). Review comment posted instead.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-8-review.md`
+
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.
 - **`gh pr review --approve` fails on self-owned PRs** — always fall back to `--comment` and record the verdict in the decisions inbox. This is a GitHub API constraint, not a workflow bug.

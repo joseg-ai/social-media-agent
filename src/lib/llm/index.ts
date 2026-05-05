@@ -20,6 +20,13 @@
 export { getLLMClient, resetLLMClient } from "./client";
 export { chat, chatStream, chatJSON } from "./chat";
 export { AppError, normalizeLLMError } from "./errors";
+export { getUsageInRange, getTotalTokensInRange } from "./usage";
 
 export type { LLMErrorCategory } from "./errors";
-export type { ChatMessage, ChatOptions, ChatResult, UsageLogEntry } from "./chat";
+export type {
+  ChatMessage,
+  ChatOptions,
+  ChatResult,
+  UsageLogEntry,
+} from "./chat";
+export type { LlmCallRow, TokenTotals } from "./usage";

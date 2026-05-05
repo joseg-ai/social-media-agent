@@ -13,6 +13,53 @@
 - **IDs you own:** Foundation wave (schema design, migrations, feed_sources table, prompts table, llm_calls table for token tracking)
 - **Reference:** .squad/decisions/decisions.md contains all schema requirements (Q5-Q9) and all resolved decisions (Q1-Q9)
 
+
+### 2026-05-05 — WI-19: LinkedIn OAuth 2.0 flow
+
+**Branch:** `squad/wi-19-linkedin-oauth` | **PR:** https://github.com/joseg-ai/social-media-agent/pull/7
+
+#### What I built
+
+Three API routes + three lib modules covering the full OAuth authorization code flow:
+
+| File | Purpose |
+|------|---------|
+| `src/lib/crypto.ts` | AES-256-GCM encrypt/decrypt. Format: `iv:ciphertext:authTag` (all base64, self-contained per token column). 12-byte random IV per call. Key from `LINKEDIN_TOKEN_ENCRYPTION_KEY`. |
+| `src/lib/linkedin/oauth.ts` | `getAuthorizationUrl`, `exchangeCodeForToken`, `refreshAccessToken`. Standard fetch only. |
+| `src/lib/linkedin/tokens.ts` | `storeTokenResponse` (UPSERT with onConflictDoUpdate), `getValidAccessToken` (auto-refresh 5-min window), `isLinkedInConnected`. |
+| `GET /api/linkedin/auth` | Random 32-byte hex state → HttpOnly SameSite=Lax cookie → redirect to LinkedIn. |
+| `GET /api/linkedin/callback` | `timingSafeEqual` state check → code exchange → encrypt → UPSERT → clear cookie → redirect. |
+| `POST /api/linkedin/disconnect` | Delete `oauth_tokens` row, redirect to `/?linkedin=disconnected`. |
+
+#### Scope rationale
+
+`openid profile w_member_social`:
+- `openid` + `profile` — OpenID Connect, gives id_token + user identity (sub, name) for future dashboard display.
+- `w_member_social` — post on the member's behalf; required for WI-12.
+- Refresh tokens are optional — LinkedIn issues them for the "Sign In with LinkedIn using OpenID Connect" product configuration. Code handles them if present but does not require them.
+
+#### Encryption strategy
+
+- `encryptToken(plaintext)` → `iv_b64:ciphertext_b64:authTag_b64` (compound, self-contained).
+- Both `encrypted_access_token` and `encrypted_refresh_token` store the full compound string.
+- `iv` and `auth_tag` schema columns hold the access token's IV and auth tag separately — tooling/key-rotation convenience, not needed for decryption.
+- `parseEncryptedToken()` helper extracts the parts for DB column mapping.
+
+#### Refresh strategy
+
+`getValidAccessToken()`:
+1. Read row from DB.
+2. If `expiresAt - now < 5 min` AND refresh token exists → call `refreshAccessToken` → `storeTokenResponse`.
+3. If refresh fails but token is still valid → return current token (graceful degradation).
+4. If refresh fails and token is expired → throw with reconnect instruction.
+
+#### DB dependency
+
+`src/db/schema.ts` on this branch is a **soft-import** (oauth_tokens only). Full schema is in PR #6. Rebase required after #6 merges. Startup check in `tokens.ts` throws a clear error if the table is missing.
+
+#### env.ts change
+
+Added `SKIP_ENV_VALIDATION=1` support. Required for CI builds where env vars are injected at runtime. Standard T3-stack pattern. No breaking change — validation still runs in dev/prod when the flag is absent.
 ### 2026-05-05 — PR #7 (WI-19 LinkedIn OAuth) rebased onto main; schema.ts merged
 - **Rebase pattern:** During parallel work, opened PR #7 with soft-import partial schema (oauth_tokens only); after PR #6 (full Drizzle schema) merged to main, merged main into PR #7 to adopt the full schema wholesale. All OAuth columns verified present in the full schema from PR #6.
 - **Unused columns:** oauth_tokens table has redundant iv/auth_tag columns (left unused — encryption stored inside encryptedAccessToken/encryptedRefreshToken in 'iv:ciphertext:authTag' format). Decision note filed at .squad/decisions/inbox/tank-pr-7-rebase.md.
@@ -66,4 +113,12 @@ db:studio     drizzle-kit studio            # GUI schema explorer (dev only)
 2. **`defaultNow()` is a DB-side expression** — Drizzle generates `DEFAULT now()` in SQL. This is UTC on the docker-compose Postgres (no TZ set). Confirmed correct.
 3. **`unique()` vs column-level `.unique()`** — used column-level `.unique()` for single-column constraints and table-level `unique()` for composite constraints. Drizzle generates both correctly.
 4. **HMR singleton pattern** — `src/db/index.ts` uses `globalThis` to cache the db instance across Next.js hot reloads in dev, preventing connection pool exhaustion.
+
+### 2026-05-05 — PR #7 (WI-19 LinkedIn OAuth) rebased onto main; schema.ts merged successfully
+
+**Rebase pattern:** During parallel development, PR #7 was opened with a soft-import partial `src/db/schema.ts` (oauth_tokens table only) before PR #6 (full Drizzle schema) merged. After PR #6 merged to main, PR #7 was merged with main to adopt the full schema wholesale. All OAuth column requirements verified present in the final schema.
+
+**Unused columns:** The oauth_tokens table in main's schema contains redundant `iv` and `auth_tag` columns at table level. These are left unused by design because encryption is self-contained per column using the format `iv:ciphertext:authTag`. Decision note filed locally at `.squad/decisions/inbox/tank-pr-7-rebase.md`.
+
+**Build verification:** npm run lint exits 0, npm run build exits 0. PR #7 ready for review.
 

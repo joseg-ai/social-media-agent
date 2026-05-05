@@ -20,6 +20,7 @@
     "postgres": "^3.4.9",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "rss-parser": "^3.13.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

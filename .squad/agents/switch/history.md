@@ -54,6 +54,38 @@
 - **API limitation:** `gh pr review --approve` rejected (cannot approve own-org PR). Review comment posted instead.
 - **Decision file:** `.squad/decisions/inbox/switch-pr-10-review.md`
 
+### 2026-05-05 — WI-09 Draft Generator PR #12 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Oracle's WI-09 draft generator is functionally correct for single-user MVP.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/12
+- **What was verified:** sanitizeBody unit-tested (null bytes, ZWJ, bold, italic, headings, NBSP preserved ✅), char-limit spread `[...body]` counts code points not UTF-16 units ✅, 2999+1=3000 boundary correct ✅, state='draft' hard-coded ✅, article set to 'selected' after success ✅, chat() emitUsageLog path not bypassed ✅, batch try/catch per article ✅, lint clean ✅, build clean ✅.
+- **Schema migration:** `0001_article_status.sql` adds `article_status` ENUM + `articles.status DEFAULT 'new' NOT NULL` — backwards-compatible with existing rows ✅. Not idempotent (no `IF NOT EXISTS`), acceptable for drizzle-managed workflow.
+- **Issues found:**
+  - MEDIUM (`schema.ts`, posts table): Missing `unique()` on `posts.article_id` — TOCTOU race window between SELECT-check and INSERT. No DB-level guard against duplicate posts per article. Recommend adding in WI-11 when Tank touches the posts table.
+  - MEDIUM (`generator.ts:231-245`): No transaction wrapping post INSERT + article status UPDATE. Crash between the two leaves article permanently at `status='scored'` with an orphaned post. Fix: `db.transaction()` around both statements.
+  - INFO (`generator.ts:203`): `chat()` called before post INSERT, so `llm_calls.postId` is always NULL for draft calls. FK exists but unused for this case.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-12-wi-09.md`
+
+### 2026-05-05 — WI-07 Relevance Scorer PR #15 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES (rebase required before merge).
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/15
+- **What was verified:** Schema migration (`NOT NULL DEFAULT 'new'` correct for existing rows ✅), JSON parse robustness (`chatJSON` safeParse → `AppError` throw → per-article catch in batch → `failed++` ✅), threshold default (`RELEVANCE_THRESHOLD: z.coerce.number().default(70)` in env.ts ✅), batch failure isolation (per-article try/catch ✅), idempotency (UPDATE not INSERT, batch filters `status='new'` ✅), token usage (`chatJSON→chat→emitUsageLog` ✅), prompt rendering (`getActivePrompt + renderPrompt + master_context fallback ✅), lint + build clean ✅.
+- **Blocker found:** PR #12 (WI-09) merged into `main` before this PR. WI-09 included WI-07's `0001_article_status.sql` and `schema.ts` changes as a dependency. Merging WI-07's branch to current `main` will conflict on schema.ts (enum comment wording, index ordering) and the migration file (whitespace). **Oracle must rebase on main** — after rebase, the duplicate files vanish from the diff; only `src/lib/scoring/`, env.ts RELEVANCE_THRESHOLD remain.
+- **Minor notes:** `normaliseScore(1)` ambiguity for future integer prompts (documented, non-blocking), no status guard on direct `scoreArticle` calls (informational), `schemaDescription` system message says 0-100 while v1 prompt returns 0-1 (low risk).
+- **Decision file:** `.squad/decisions/inbox/switch-pr-15-wi-07.md`
+### 2026-05-06 — WI-08 Timing Advisor PR #13 re-reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Tank fixed the original blocker (scalar key mismatch).
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/13
+- **Original blocker resolved:** `readPostingWindows()` reads canonical `'posting_windows'` JSONB key. No leftover scalar reads. Defaults aligned (`max_posts_per_day=1`, `min_gap_hours=20`). ✅
+- **Midnight-wrap verified:** `isInsideWindow(hour, start, end)` — all 5 mental tests pass. Scenarios I/J smoke-tested ✅.
+- **Jitter applied:** Pre-flight `schedule_for` outputs all get `withJitter(target, ctx.jitter_minutes)`. LLM path Zod-validated. ✅
+- **Days allowlist:** Weekday check (step 3) runs before hour window. `daysUntilNext` loop finds next allowed day. Scenario K (Sunday → Monday) ✅.
+- **Lint + build:** Both exit 0 ✅.
+- **Notes (non-blocking):**
+  - N1: Jitter not applied to LLM-returned `schedule_for` (intentional? — recommend JSDoc)
+  - N2: JSONB cast without Zod parse — wrong-type stored values degrade silently to `schedule_for`; fix in WI-23
+  - N3: `daysUntilNext` exits at 8 if all days invalid (malformed data only)
+- **Decision file:** `.squad/decisions/inbox/switch-pr-13-rereview.md`
+
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.
 - **`gh pr review --approve` fails on self-owned PRs** — always fall back to `--comment` and record the verdict in the decisions inbox. This is a GitHub API constraint, not a workflow bug.

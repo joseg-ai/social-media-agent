@@ -19,6 +19,11 @@
 - **What was verified:** 5 module dirs + placeholders, tsconfig path aliases (`tsc --noEmit` clean), `.env.example` with all 11 required vars, `env.ts` fail-fast confirmed by runtime test (throws listing all missing fields, no value leakage), docker-compose postgres:16 + named volume matches DATABASE_URL hint, drizzle.config.ts placeholder correct, lint clean, build clean (Turbopack), 15 changed files all in scope.
 - **API limitation:** `gh pr review --approve` rejected (cannot approve own PR). Review comment posted instead; verdict recorded in `.squad/decisions/inbox/switch-pr-3-review.md`.
 
+### 2026-05-05 — WI-19 LinkedIn OAuth PR #7 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Crypto core correct (fresh IV, authTag verified, timingSafeEqual). Key finding: `iv`/`authTag` columns are NOT "unused by design" — `storeTokenResponse` actively writes them (redundant + asymmetric, not a security issue). Follow-ups: stop writing redundant columns, add key-length `.refine()` in env.ts.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/7
+- **Decision file:** `.squad/decisions/inbox/switch-pr-7-review.md`
+
 ## Learnings
 
 ### 2026-05-05 — WI-10 Prompt Management PR #8 reviewed → APPROVED WITH NOTES
@@ -31,6 +36,23 @@
   - INFO (`smoke.ts`): Smoke test reimplements service logic inline, doesn't call production functions.
 - **API limitation:** `gh pr review --approve` rejected (cannot approve own-org PR). Review comment posted instead.
 - **Decision file:** `.squad/decisions/inbox/switch-pr-8-review.md`
+### 2026-05-05 — WI-18 PR #9 reviewed -> APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Oracle's token usage persistence layer passes all acceptance criteria.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/9
+- **What was verified:** Fire-and-forget try/catch wraps entire `emitUsageLog` body; both call sites use `void`; `[llm_calls insert failed]` tag confirmed. All `UsageLogEntry` required fields preserved; new optional FK fields are additive. Schema NOT NULL column audit complete — all covered by mapping or DB defaults. `getTotalTokensInRange` uses `sum()` not `count()` for tokens. Inclusive bounds documented in JSDoc.
+- **Issues flagged:** LOW — missing inline comment in `emitUsageLog` body explaining `request_id` is intentionally dropped (no schema column). INFO — smoke test uses two separate DB connections; test row leaks on assertion failure. INFO — `llm_calls.success` column always `true` (misleading name, design-level note for WI-17).
+- **API limitation:** `gh pr review --approve` rejected (cannot approve own PR). Review comment posted instead; verdict recorded in `.squad/decisions/inbox/switch-pr-9-review.md`.
+
+### 2026-05-05 — WI-04 RSS Parser + Ingestion PR #10 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Tank's WI-04 RSS parser + ingestion is solid.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/10
+- **What was verified:** Error contract (network errors caught/returns `{0,0}`, DB errors rethrow, `lastErrorMessage: null` cleared on success ✅), dedupe via `articles.url` unique constraint (exists at `schema.ts:81`) + `onConflictDoNothing().returning()` count correctness ✅, 15s timeout ✅, all NOT NULL columns populated ✅, build/lint clean ✅.
+- **Issues found:**
+  - LOW (`parser.ts`): No URL scheme validation before `parseFeed()` — SSRF-class risk (file://, gopher://). Mitigated by `feed_sources` being admin-only DB access. Recommend adding scheme guard in WI-06 or micro-fix.
+  - LOW (`ingest.ts`): `consecutiveFailCount` increment is read-modify-write in app code — race under concurrent ingests. Covered by WI-06 advisory locks.
+  - INFO (`schema.ts` — WI-02 artefact): Composite `unique(url, content_hash)` is dead code since `url` alone is already globally unique. Not harmful, not in scope.
+- **API limitation:** `gh pr review --approve` rejected (cannot approve own-org PR). Review comment posted instead.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-10-review.md`
 
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.

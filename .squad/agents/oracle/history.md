@@ -12,7 +12,33 @@
 - **Work items:** 23 tracked at `docs/work-items.md` — you own prompt engineering (draft generation system prompt is at .squad/decisions/decisions.md)
 - **IDs you own:** Intelligence wave (prompt design, draft generation, ranking algorithm)
 - **Reference:** .squad/decisions/decisions.md contains master prompt (Q7) and all resolved decisions (Q1-Q9)
+
+### 2026-05-05 — WI-01 Foundation PR #3 pending
+- **Status:** Tank delivered WI-01 foundation. PR #3 under review by Switch.
+- **Your unblock:** Once PR #3 merges, you are unblocked for **WI-03** (LLM client factory).
+- **Dependency:** WI-01 establishes env schema, Drizzle ORM, and async job infrastructure.
+# Project Context
+
+- **Owner:** Jose Guajardo
+- **Project:** social-media-agent — agentic LinkedIn auto-poster. Curates from Microsoft RSS feeds + learn.microsoft.com articles. The "smart" requirement: the system must judge *what* is worth posting and *when* the post will land best.
+- **Stack:** Next.js 15 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS 4. LLM provider TBD.
+- **Created:** 2026-05-04
+
+## Learnings
+
+### 2026-05-04 — PRD v0.2 approved-pending-Jose; work items documented
+- **PRD status:** v0.2 locked, awaiting Jose approval before Wave 1 begins
+- **Work items:** 23 tracked at `docs/work-items.md` — you own prompt engineering (draft generation system prompt is at .squad/decisions/decisions.md)
+- **IDs you own:** Intelligence wave (prompt design, draft generation, ranking algorithm)
+- **Reference:** .squad/decisions/decisions.md contains master prompt (Q7) and all resolved decisions (Q1-Q9)
 
+### 2026-05-05 — WI-18 Token usage tracking (DB persistence layer) shipped
+
+**Branch:** `squad/wi-18-token-usage`
+**PR:** WI-18: token usage tracking via llm_calls inserts
+
+Replaced the `emitUsageLog` console.log stub in `src/lib/llm/chat.ts` with an async DB INSERT into `llm_calls`. The WI-03 contract (`deployment`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `latency_ms`, `request_id`) is preserved exactly — field mapping is internal (`deployment→model`, `latency_ms→durationMs`). Extended `UsageLogEntry` with optional `article_id`, `post_id`, `prompt_id` FK fields for future agent callers; backward-compatible (zero existing callers break). The insert is fire-and-forget (`void`), wrapped in try/catch with a `[llm_calls insert failed]` tagged `console.error` — usage logging can never crash an LLM call. Added `src/lib/llm/usage.ts` with `getUsageInRange(start, end)` and `getTotalTokensInRange(start, end)` aggregation helpers (powers WI-17 dashboard), plus `usage.smoke.ts` that exercises insert+query and gracefully skips when DB is unavailable.
+
 ### 2026-05-05 — WI-10 Prompt management system shipped
 
 **Branch:** `squad/wi-10-prompt-management`

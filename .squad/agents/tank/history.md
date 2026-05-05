@@ -20,6 +20,11 @@ Built the full CRUD service layer and API routes for `feed_sources` in `src/lib/
 
 ### 2026-05-05 — WI-04: RSS feed parser + ingestion service
 
+### 2026-05-05 — WI-04: RSS feed parser + ingestion service
+
+Built the RSS ingestion module in `src/lib/feeds/`. Chose `rss-parser` (de-facto Node.js standard, ships its own TypeScript types, handles RSS 2.0 + Atom transparently). `parseFeed(url)` normalises feed items into `ParsedArticle` with `contentHash` (SHA-256 of title+summary, matching the schema column). `ingestFeed(feedSourceId)` bulk-inserts via Drizzle's `.onConflictDoNothing().returning()` so the inserted/skipped counts are exact with a single DB round-trip per run — no N+1 SELECT per article. Error contract: network/parse failures are caught and written to `last_error_message` (returns `{0,0}`); DB errors rethrow so programmer mistakes surface loudly. Smoke test verified against `hnrss.org/frontpage` — parsed 20 articles. Cron scheduling intentionally deferred to WI-06. Decision note filed at `.squad/decisions/inbox/tank-wi-04-rss.md`.
+
+### 2026-05-04 — PRD v0.2 approved-pending-Jose; work items documented
 - **PRD status:** v0.2 locked, awaiting Jose approval before Wave 1 begins
 - **Work items:** 23 tracked at `docs/work-items.md` — you own database schema and ORM spike resolution
 - **IDs you own:** Foundation wave (schema design, migrations, feed_sources table, prompts table, llm_calls table for token tracking)

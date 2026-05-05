@@ -19,6 +19,11 @@
 - **What was verified:** 5 module dirs + placeholders, tsconfig path aliases (`tsc --noEmit` clean), `.env.example` with all 11 required vars, `env.ts` fail-fast confirmed by runtime test (throws listing all missing fields, no value leakage), docker-compose postgres:16 + named volume matches DATABASE_URL hint, drizzle.config.ts placeholder correct, lint clean, build clean (Turbopack), 15 changed files all in scope.
 - **API limitation:** `gh pr review --approve` rejected (cannot approve own PR). Review comment posted instead; verdict recorded in `.squad/decisions/inbox/switch-pr-3-review.md`.
 
+### 2026-05-05 — WI-19 LinkedIn OAuth PR #7 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Crypto core correct (fresh IV, authTag verified, timingSafeEqual). Key finding: `iv`/`authTag` columns are NOT "unused by design" — `storeTokenResponse` actively writes them (redundant + asymmetric, not a security issue). Follow-ups: stop writing redundant columns, add key-length `.refine()` in env.ts.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/7
+- **Decision file:** `.squad/decisions/inbox/switch-pr-7-review.md`
+
 ## Learnings
 
 ### 2026-05-05 — WI-18 PR #9 reviewed -> APPROVED WITH NOTES

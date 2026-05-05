@@ -7,6 +7,18 @@
 
 ## Learnings
 
+### 2026-05-05 — WI-06: Cron job runner + pg advisory locks (feed poll)
+
+Built the scheduling layer in `src/lib/jobs/`. Key decisions and learnings:
+
+- **Advisory lock connection safety:** `pg_try_advisory_lock` is session-scoped in Postgres — mixing connections (pool) would silently fail to release. Used `db.$client.reserve()` to pin both `pg_try_advisory_lock` and `pg_advisory_unlock` to the same connection. The `finally` in the outer try guarantees the connection is released even if unlock throws.
+- **jobLockKey determinism:** SHA-256 of the job name, first 15 hex chars → 60-bit bigint. Fits inside Postgres `int8` positive range (~4.6e18 max). Collision probability is negligible for the small number of jobs we'll have.
+- **Error containment:** Two levels of catch: (1) per-feed catch in `feed-poll.ts` handler so one broken feed can't abort the rest; (2) per-run catch in `runner.ts` cron callback so a handler crash doesn't kill the cron schedule.
+- **node-cron shutdown:** `task.stop()` prevents new ticks but doesn't await in-flight runs. Acceptable for v1 — Postgres transactions are atomic so a mid-run exit is clean. Will need drain logic if we add non-idempotent jobs.
+- **Shared-environment git hazard:** Multiple AI agents share the same working directory and git checkout. Use `git worktree add` to create an isolated checkout when other agents are concurrently switching branches — this was essential to commit cleanly on this branch.
+- **Standalone script:** `scripts/run-jobs.ts` loads `@/lib/env` at import time which validates env vars before any cron starts — fail-fast on bad config. SIGINT/SIGTERM calls `stopJobs()` then `process.exit(0)`.
+- **PR:** https://github.com/joseg-ai/social-media-agent/pull/14
+
 ### 2026-05-05 — WI-05: Feed source CRUD service + API routes
 
 Built the full CRUD service layer and API routes for `feed_sources` in `src/lib/feeds/`. Key decisions:

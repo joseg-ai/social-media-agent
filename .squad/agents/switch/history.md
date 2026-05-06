@@ -72,6 +72,16 @@
 - **Blocker found:** PR #12 (WI-09) merged into `main` before this PR. WI-09 included WI-07's `0001_article_status.sql` and `schema.ts` changes as a dependency. Merging WI-07's branch to current `main` will conflict on schema.ts (enum comment wording, index ordering) and the migration file (whitespace). **Oracle must rebase on main** — after rebase, the duplicate files vanish from the diff; only `src/lib/scoring/`, env.ts RELEVANCE_THRESHOLD remain.
 - **Minor notes:** `normaliseScore(1)` ambiguity for future integer prompts (documented, non-blocking), no status guard on direct `scoreArticle` calls (informational), `schemaDescription` system message says 0-100 while v1 prompt returns 0-1 (low risk).
 - **Decision file:** `.squad/decisions/inbox/switch-pr-15-wi-07.md`
+### 2026-05-06 — WI-17 Token Usage Dashboard PR #18 reviewed → REJECTED
+- **Status:** REJECTED. Two blockers; do not merge.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/18
+- **What was verified:** Cross-territory scope clean (only `src/lib/llm/*`, `src/app/(dashboard)/usage/`, `src/app/api/usage/` — no posts/feeds/drafts/scoring touched ✅), `listRecentCalls` adds new function without modifying existing signatures ✅, cost formula correct (`(tokens/1000)*rate`, no off-by-1000 ✅), auth covered by middleware ✅, `force-dynamic` present ✅, no charting deps ✅, lint exit 0 ✅.
+- **Blockers:**
+  - HIGH: `layout.tsx` is NOT on main. PR description claims "already on main via WI-15 PR" — false; `git show origin/main:src/app/(dashboard)/layout.tsx` → fatal. PR #17 (WI-15) still open. Merge order: #17 first, then #18. No code change needed on this PR.
+  - MEDIUM: `llm_calls.model` stores `env.AZURE_OPENAI_DEPLOYMENT` (Azure deployment name), not the OpenAI model identifier. Pricing table keys must match exactly. Silent fallback to `DEFAULT_PRICING` if deployment name differs (e.g. "prod-gpt4o" doesn't match "gpt-4o"). `DEFAULT_PRICING` description says "GPT-4o rates" but is a different value. Three Claude entries (`claude-sonnet-4.6`, `claude-haiku-4.5`, `claude-opus-4.5`) are dead code — all calls route through Azure OpenAI.
+- **Non-blocking:** `rangeToWindow` timezone undocumented (`setHours(0,0,0,0)` = server local time). `rangeToWindow`/`parseRange` duplicated verbatim in `route.ts` and `page.tsx`.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-18-wi-17.md`
+
 ### 2026-05-06 — WI-11 Post State Machine PR #16 reviewed → APPROVED WITH NOTES
 - **Status:** APPROVED WITH NOTES. Tank's WI-11 state machine + scheduling integration is solid. Merged.
 - **PR link:** https://github.com/joseg-ai/social-media-agent/pull/16

@@ -105,3 +105,24 @@
 - **Branch:** `squad/wi-17-usage-ui` → PR #18 (base: squad/wi-15-feeds-ui)
 - **Commit:** `c21c752`
 - **Gotcha:** Git working tree chaos from stash + wrong-branch checkout; had to manually reset `squad/wi-14-queue-history-ui` and re-apply changes cleanly on the correct branch
+
+### 2026-05-05 — WI-14 PR #19 submitted
+
+- **Branch:** `squad/wi-14-queue-history-ui` → PR #19 (base: main)
+- **Deliverables:**
+  - `src/lib/posts/queries.ts` — `listPosts()` / `getPost()` with posts→articles→feed_sources inner join; `PostRow` type with correct field names
+  - `GET /api/posts`, `GET/PATCH/DELETE /api/posts/[id]`, `POST /api/posts/[id]/approve`
+  - `/queue` page: Server Component, `force-dynamic`, `PostCard` + `EditDraftForm` client components
+  - `/history` page: Server Component, `force-dynamic`, 50-per-page pagination, `HistoryPostRow` read-only
+- **Schema facts learned:**
+  - `postStateEnum` values: `"draft"`, `"scheduled"`, `"posting"`, `"posted"`, `"failed"`, `"cancelled"` — NOT `"published"`
+  - Correct field names: `feedSourceName` (not `feedName`), `articleScore` (not `relevanceScore`), `articleScoreReason` (not `scoringReasoning`)
+  - Drizzle join result keyed by table name `feed_sources` (not the JS variable `feedSources`)
+- **WI-11 coordination:** Direct DB UPDATE used with `TODO(WI-11)` comments; swap for `approveDraft(id)` / `cancelPost(id, reason)` when Tank's WI-11 merges
+- **Build quirks:**
+  - `tsconfig.tsbuildinfo` + `.next/` stale cache causes tsc "file not found" errors even when files exist — always delete both before `npm run build`
+  - Turbopack `npm run build` intermittent ENOENT on Windows; retrying after cache clear resolves it
+  - Git branch (`.git/HEAD`) resets to `main` between PowerShell calls in this environment — always `git checkout BRANCH` at start of each call
+  - Files written to disk only persist across PowerShell calls if committed to git in the same call
+- **Char count:** Use `[...text].length` (spread to code points) not `.length` for accurate Unicode/emoji count against LinkedIn's 3000 char limit
+- **UX pattern:** `useTransition` + `router.refresh()` for optimistic UI; no additional state management library needed

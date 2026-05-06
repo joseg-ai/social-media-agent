@@ -11,19 +11,30 @@ interface Props {
 export function FeedRow({ feed }: Props) {
   const router = useRouter();
   const [togglePending, setTogglePending] = useState(false);
+  const [toggleError, setToggleError] = useState<string | null>(null);
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleToggle() {
+    setToggleError(null);
     setTogglePending(true);
     try {
-      await fetch(`/api/feeds/${feed.id}`, {
+      const res = await fetch(`/api/feeds/${feed.id}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ isActive: !feed.enabled }),
       });
+
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        setToggleError(data.error ?? "Failed to update feed. Please try again.");
+        return;
+      }
+
       router.refresh();
+    } catch {
+      setToggleError("Network error. Please try again.");
     } finally {
       setTogglePending(false);
     }
@@ -133,6 +144,30 @@ export function FeedRow({ feed }: Props) {
           </div>
         </td>
       </tr>
+
+      {/* Inline error row for toggle failures */}
+      {toggleError && (
+        <tr>
+          <td
+            colSpan={5}
+            className="px-4 py-2 bg-red-50 dark:bg-red-900/10"
+          >
+            <p role="alert" className="text-sm text-red-700 dark:text-red-400 flex items-start gap-2">
+              <span aria-hidden="true">⚠️</span>
+              <span>
+                {toggleError}{" "}
+                <button
+                  type="button"
+                  onClick={() => setToggleError(null)}
+                  className="underline underline-offset-2 hover:no-underline focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+                >
+                  Dismiss
+                </button>
+              </span>
+            </p>
+          </td>
+        </tr>
+      )}
 
       {/* Inline error row for 409 delete conflict */}
       {deleteError && (

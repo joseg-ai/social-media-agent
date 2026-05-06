@@ -16,16 +16,17 @@ export function AddFeedForm({ prominent = false }: Props) {
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
     const form = new FormData(e.currentTarget);
     const url = (form.get("url") as string).trim();
     const rawName = (form.get("name") as string).trim();
-    // Default name to URL hostname when the user leaves the field empty
-    const name = rawName || new URL(url).hostname;
 
+    setLoading(true);
     try {
+      // Default name to URL hostname when the user leaves the field empty
+      const name = rawName || new URL(url).hostname;
+
       const res = await fetch("/api/feeds", {
         method: "POST",
         credentials: "include",

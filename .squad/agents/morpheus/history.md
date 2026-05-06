@@ -34,6 +34,25 @@ Resolved 4 architectural spikes (Drizzle ORM, node-cron + pg advisory locks, ope
 - **IDs you own:** Foundation wave (schema design, migrations, Azure OpenAI integration), then Ingestion, Intelligence, Posting phases
 - **Reference:** .squad/decisions/decisions.md contains all resolved decisions (Q1-Q9)
 
+### 2026-05-22 — WI-22: Azure App Service deployment shipped
+
+- **Branch:** `squad/wi-22-azure-deploy`
+- **PR:** "WI-22: Azure App Service deployment (Dockerfile + start-prod + migrations + docs)"
+- **Scope delivered:**
+  - `scripts/start-prod.ts` — single-process boot: cron jobs in-process + `next start` as child process; SIGTERM/SIGINT graceful shutdown
+  - `scripts/run-migrations.ts` — standalone migration runner for pre-deploy hook
+  - `Dockerfile` — multi-stage `node:22-alpine` build; non-root user; `CMD ["npm", "run", "start:prod"]`
+  - `.dockerignore` — excludes `.next`, `node_modules`, `.env*`, squad state
+  - `package.json` — added `start:prod` and `db:migrate:prod` scripts
+  - `src/app/api/health/route.ts` — `GET /api/health` with DB ping; public (no auth)
+  - `src/middleware.ts` — added `/api/health` to PUBLIC_PATHS
+  - `docs/deployment/azure-app-service.md` — full deployment guide with `az` CLI commands, Key Vault references, OIDC setup, health check, Managed Identity for Azure OpenAI
+  - `.github/workflows/deploy.yml` — GHA: build → migrate → deploy, OIDC auth (no stored secrets)
+- **Key decisions:**
+  - Single-process over App Service WebJob — simpler ops, shared pool, advisory locks handle multi-instance
+  - `tsx` at runtime for `start:prod` and `run-migrations` — avoids separate compilation step for scripts
+  - Dockerfile copies full `src/` because `tsx` needs source files for `@/` path aliases at runtime
+
 ### 2026-05-04 — Architecture spikes resolved (4/4)
 - **Spike 1 (ORM):** Drizzle ORM — lightweight, zero binary overhead, native jsonb support, fast cold-start on App Service.
 - **Spike 2 (Job runner):** node-cron in-process with Postgres advisory locks — avoids Redis dependency; advisory locks handle future multi-instance.

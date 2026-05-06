@@ -131,6 +131,18 @@
 - **Lint/Build:** Lint exit 0. Compile + type-check + 12/12 static pages clean. Turbopack ENOENT pre-existing on main. ✅
 - **Side-effect for PR #18:** `layout.tsx` now on main — WI-17 layout.tsx blocker resolved; Oracle should rebase.
 - **Decision file:** `.squad/decisions/inbox/switch-pr-17-wi-15.md`
+### 2026-05-06 — WI-14 Queue + History Dashboard PR #19 re-reviewed → APPROVED + MERGED
+- **Status:** APPROVED. Both HIGH blockers from first review fully fixed. Rebase onto main clean (no conflicts). Squash-merged to main. Wave 4 batch-1 complete (WI-11, WI-15, WI-17, WI-14 all on main).
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/19
+- **Fixes verified:**
+  1. **Blocker 1 (approve route):** `src/app/api/posts/[id]/approve/route.ts` now imports `approveDraft, InvalidStateTransitionError` from `@/lib/posts`. Calls `await approveDraft(id)` — no raw `db.update()`. Catches `InvalidStateTransitionError` → 409 with message "Post is not in draft state — cannot approve". Does NOT pass `schedule_for`. TODO(WI-11) comment gone. ✅
+  2. **Blocker 2 (DELETE route):** `src/app/api/posts/[id]/route.ts` imports `cancelPost, InvalidStateTransitionError`. Reads optional `reason` from body; validates `typeof raw !== "string"` (strict, not String coercion) + ≤500 chars. Calls `await cancelPost(id, reason)`. Catches `InvalidStateTransitionError` → 409 with descriptive message. TODO gone. ✅
+  3. **PATCH handler (pre-existing, no change needed):** State guard `existing.state !== 'draft'` → 409 present at line 36. ✅
+- **Scope (post-rebase diff vs main):** `src/app/(dashboard)/history/`, `src/app/(dashboard)/queue/`, `src/app/api/posts/`, `src/lib/posts/queries.ts`, `.squad/agents/trinity/history.md`. 10 files, no foreign-agent territory. ✅
+- **Layout.tsx:** All 6 NAV_LINKS intact on main (Feeds, Queue, History, Prompts, Usage, Settings). Rebase clean. ✅
+- **Lint:** Exit 0. Only pre-existing `_post` unused-var warning in `publisher.ts` (not from this PR). ✅
+- **Build (`SKIP_ENV_VALIDATION=1`):** Exit 0. 18 routes including `/queue`, `/history`, `/api/posts/[id]/approve`. ✅
+
 ### 2026-05-06 — WI-14 Queue + History Dashboard PR #19 reviewed → REJECTED
 - **Status:** REJECTED. Two blockers; do not merge.
 - **PR link:** https://github.com/joseg-ai/social-media-agent/pull/19

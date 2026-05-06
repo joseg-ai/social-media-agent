@@ -138,7 +138,12 @@ export const posts = pgTable(
     postedAt: timestamp("posted_at", { withTimezone: true }),
     /** LinkedIn URN returned on successful post — used as audit trail. */
     linkedinPostId: text("linkedin_post_id"),
+    /** Last error message from LinkedIn API or publisher — set by markFailed(). */
     failureReason: text("failure_reason"),
+    /** Cumulative count of failed posting attempts — incremented by markFailed(). */
+    failureCount: integer("failure_count").notNull().default(0),
+    /** Reason the post was cancelled — set by cancelPost(). */
+    cancelReason: text("cancel_reason"),
     /** When true, the post was simulated — no real LinkedIn API call was made. */
     isDryRun: boolean("is_dry_run").notNull().default(false),
     /** When true, this post was approved for autonomous posting (no human gate). */

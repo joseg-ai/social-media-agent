@@ -7,6 +7,38 @@
 
 ## Learnings
 
+### 2026-05-06 — WI-11: Post state machine + scheduling (PR #16)
+
+**Branch:** `squad/wi-11-post-state-machine` | **PR:** https://github.com/joseg-ai/social-media-agent/pull/16
+
+#### What I built
+
+Five files delivering the complete WI-11 scope:
+
+| File | Purpose |
+|------|---------|
+| `src/lib/posts/state-machine.ts` | `transitionPost()` + helpers (`approveDraft`, `cancelPost`, `claimForPosting`, `markPosted`, `markFailed`, `retryFailed`) |
+| `src/lib/posts/scheduler.ts` | `scheduleDraft()` (runs timing advisor → approveDraft) + `scheduleAllDrafts()` batch |
+| `src/lib/posts/publisher.ts` | `claimReadyPosts()` + `publishPost()` stub (WI-12) |
+| `src/lib/posts/state-machine.smoke.ts` | 4 smoke tests: happy path, fail+retry, invalid transition, race (5 parallel claims) |
+| `src/lib/posts/index.ts` | Public exports |
+
+Schema: Added `failure_count INT DEFAULT 0` and `cancel_reason TEXT` to `posts` (migration 0002). All other required columns already existed.
+
+#### Key decisions
+
+- **Concurrency:** Conditional UPDATE (`WHERE id=? AND state='scheduled'`) is the sole race gate. No `SELECT FOR UPDATE SKIP LOCKED`, no advisory locks. Postgres atomic single-statement UPDATE is sufficient — cleaner than two-phase SELECT+UPDATE.
+- **`cancelPost()`:** Does a SELECT first to determine current state (can cancel from draft, scheduled, or failed). This is safe because cancel is idempotent — the subsequent UPDATE is still conditional.
+- **`type PostUpdate`:** Drizzle ORM's `.set()` type resolved via `Parameters<ReturnType<typeof db.update<typeof posts>>["set"]>[0]` to avoid `Record<string, unknown>` cast. This keeps full type safety for all SET fields including `sql`` expressions for `failureCount`.
+- **Shared-environment hazard:** Trinity's WI-14/WI-17 parallel work left untracked files (`queries.ts`, `usage/page.tsx`) in the shared working directory that caused build errors unrelated to WI-11. Used `git branch -f` to fix HEAD contention after commit landed on wrong branch.
+
+#### Smoke tests
+
+- Test 1: draft → scheduled → posting → posted (asserts all states + linkedin_post_id + posted_at)
+- Test 2: posting → failed → scheduled (asserts failure_count incremented, failure_reason set, retry lands in scheduled)
+- Test 3: posted → draft throws `InvalidStateTransitionError`
+- Test 4: 5 parallel `claimForPosting()` calls → exactly 1 succeeds, 4 get `InvalidStateTransitionError`
+
 ### 2026-05-06 — WI-08 revision (PR #13): timing advisor schema alignment
 
 Took over from Oracle (reviewer-rejection lockout) to fix the Switch-blocked PR.

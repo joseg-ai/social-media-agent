@@ -7,6 +7,51 @@
 
 ## Learnings
 
+### 2026-05-07 — WI-22 Azure App Service deployment PR #26 reviewed → APPROVED WITH NOTES (Wave 4 batch-3 complete)
+
+- **Status:** APPROVED WITH NOTES. Squash merged, branch deleted.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/26
+- **What was verified:**
+  - lint ✅ build ✅ tests ✅ (15 unit pass, 3 E2E skipped — no DB in CI)
+  - No secrets in Dockerfile (only `SKIP_ENV_VALIDATION`, `NODE_ENV`, `PORT`); `.dockerignore` excludes `.env*`
+  - OIDC deploy.yml uses `vars.*` for client-id/tenant-id/subscription-id (non-secret); no stored service principal secrets
+  - `/api/health` exact-match in `isPublicPath()`; DB error returns `{db:"unreachable"}` only — no details leaked
+  - Graceful shutdown order correct: `stopJobs()` → SIGTERM child → 10s force-SIGKILL → `process.exit(0)`
+  - `start-prod.ts` imports `register/startJobs/stopJobs` from `@/lib/jobs` (shared module, not duplicated)
+  - Cron job errors double-caught in `runner.ts` — cannot crash parent or take down Next.js
+  - Migration runner idempotent (Drizzle `migrate()`); gates deploy via `needs:` in GHA
+  - Env var table in docs matches `src/lib/env.ts` exactly; Always On documented; cost ~$30–50/month correct
+  - Scope clean — 9 expected files + Morpheus agent history; no touches to posts/drafts/scoring/etc.
+- **Issues found:**
+  1. **HIGH — Dockerfile ships devDeps:** `tsx` is a devDep but required at runtime. Runtime stage copies full `node_modules` from builder (eslint, drizzle-kit, vitest, etc.). Fix: move `tsx` to `dependencies`, then `npm ci --omit=dev` in runtime stage.
+  2. **MEDIUM — DATABASE_URL as GitHub secret:** Migration job uses `${{ secrets.DATABASE_URL }}` rather than Key Vault. Documented as intentional. Follow-up: use `azure/get-keyvault-secrets` action.
+  3. **NON-BLOCKING — No HEALTHCHECK in Dockerfile:** App Service uses platform health checks; `/api/health` works correctly. No Docker-native HEALTHCHECK directive.
+- **Merge verdict:** APPROVE WITH NOTES — no functional bugs; devDeps issue is quality/security hygiene, non-blocking for ZIP-based deploy path.
+- **Decision file:** `.squad/decisions/inbox/switch-wi-22-deploy.md`
+- **Wave 4 batch-3 complete:** WI-22 merged. Only WI-20 (E2E test) remains.
+
+### 2026-05-07 — WI-20 E2E pipeline integration test — PR opened
+
+- **Status:** PR open for review.
+- **Branch:** `squad/wi-20-e2e-pipeline-test`
+- **File:** `tests/e2e/full-pipeline.test.ts`
+- **What was built:**
+  - Full end-to-end test: ingest → score → draft → schedule → claim → publish
+  - Uses real Postgres (skip gracefully with clear message if `DATABASE_URL` unset)
+  - `beforeAll` drops public schema + re-runs all Drizzle migrations for a clean slate
+  - `afterEach` truncates all application tables with `TRUNCATE ... CASCADE`
+  - 3 test cases: happy path + 2 negative (below-threshold, LinkedIn 422)
+- **Mock boundaries (correct layer):**
+  - `rss-parser` — fixture returns 2 inline articles; real `parseFeed` / `ingestFeed` path exercised
+  - `@/lib/llm` — `chatJSON` + `chat` mocked; real prompt-render and Zod-parse paths exercised
+  - `fetch` — stubbed per-test for `api.linkedin.com`; real `postToLinkedIn` / `callUgcPostsApi` exercised
+  - `@/lib/linkedin/tokens` — `getValidAccessToken` mocked to avoid AES-GCM decrypt + token env var requirement
+  - `@/lib/timing/advisor` — `decidePostingAction` mocked to return `post_now`; real scheduler + state-machine exercised
+- **Skip UX:** `describe.skipIf(!DATABASE_URL)` + warning to stderr; test files exit 0 without DB
+- **CI verified:** `npm test` exit 0 (3 E2E skipped + 15 unit pass), `npm run lint` exit 0, `npm run build` exit 0
+- **README.md:** Added E2E section under Testing with `DATABASE_URL` example and skip note
+- **Decision file:** `.squad/decisions/inbox/switch-wi-20-e2e.md`
+
 ### 2026-05-06 — WI-16 prompt editor PR #20 re-reviewed → APPROVED (Wave 4 batch-2 complete)
 
 - **Status:** APPROVED. Squash merged, branch deleted.

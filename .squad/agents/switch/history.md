@@ -2,12 +2,29 @@
 
 - **Owner:** Jose Guajardo
 - **Project:** social-media-agent ΓÇö agentic LinkedIn auto-poster pulling from Microsoft RSS + learn.microsoft.com with smart timing.
-- **Stack:** Next.js 15, React 19, TypeScript, Tailwind 4. Test framework TBD.
+- **Stack:** Next.js 15, React 19, TypeScript, Tailwind 4. **Test framework: vitest 3.2.4** (added WI-21).
 - **Created:** 2026-05-04
 
 ## Learnings
 
-### 2026-05-04 ΓÇö PRD v0.2 approved-pending-Jose; work items documented
+### 2026-05-06 — WI-21 NBSP snapshot tests PR #22 reviewed → APPROVED
+
+- **Status:** APPROVED. Merged via squash.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/22
+- **What was verified:**
+  - `sanitizeBody()` actually preserves U+00A0 — the zero-width strip regex covers `[\u200B-\u200D\uFEFF\u00AD]`, not U+00A0. Contract is real, not aspirational.
+  - All 15 tests target `sanitizeBody()` directly (pure function); mocks only prevent import-time DB/LLM singletons from crashing — no LLM passthrough.
+  - Inline snapshots are NBSP-specific and narrow; `withExplicitNbsp()` makes U+00A0 unambiguous in snapshot literals.
+  - Negative test (suite 5) confirms `\n\n` is NOT upgraded — sanitizer preserves, doesn't inject.
+  - `vitest.config.ts`: `environment: node`, `SKIP_ENV_VALIDATION: "1"` in env block, path aliases mirror tsconfig.
+  - No pre-existing `test` script on main — clean addition, no conflict.
+  - `npm test` exits 0 on two consecutive runs (no snapshot drift).
+  - Build failure (`linkedinPersonUrn` type error in `poster.ts`) is pre-existing on `main`, not introduced here.
+  - Lock file included; no production code modified.
+- **Observation:** `@vitest/snapshot` listed as explicit devDep — vitest already pulls it transitively. Harmless but redundant.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-22-wi-21.md`
+
+### 2026-05-04 — PRD v0.2 approved-pending-Jose; work items documented
 - **PRD status:** v0.2 locked, awaiting Jose approval before Wave 1 begins
 - **Work items:** 23 tracked at `docs/work-items.md` ΓÇö you own testing (NBSP-spacing snapshot tests, draft rendering validation)
 - **IDs you own:** Observability wave (test framework selection, posting flow tests, NBSP rendering validation snapshot tests)

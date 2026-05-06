@@ -34,3 +34,18 @@
 - **409 UX:** DELETE `FeedSourceHasPostsError` renders as inline error row with post count (no modal needed)
 - **Windows build workaround:** `npx next build` fails with `ENOENT: rename .next/export/500.html` on Next.js 15.5.3. Fix: pre-create `.next/export/` before running build.
 - **Shared working directory:** Stage only your own files — other agents' untracked files appear in `src/` but must not be staged.
+### 2026-05-05 — WI-17 token/cost dashboard: PR #18 open
+
+- **WI-17 status:** PR #18 open (`squad/wi-17-usage-ui` → main)
+- **Files shipped:**
+  - `src/lib/llm/pricing.ts` — pricing table + `estimateCostUsd()`
+  - `src/lib/llm/usage.ts` — added `listRecentCalls(limit)` function
+  - `src/lib/llm/index.ts` — re-exported new functions + pricing
+  - `src/app/api/usage/route.ts` — `GET /api/usage?range=today|7d|30d|month`
+  - `src/app/(dashboard)/usage/page.tsx` — full dashboard (metrics, bar chart, tables)
+- **Layout dependency:** WI-15 PR adds `(dashboard)/layout.tsx` with Usage nav link; WI-17 page depends on it merging first (or simultaneously).
+- **Shared workspace lessons:**
+  - Multiple agents share one working directory → untracked files from other agents bleed into builds.
+  - `git checkout <branch>` does NOT always switch the active branch when HEAD is detached or another agent switches it concurrently. Always verify with `git branch --show-current` after each checkout.
+  - Drizzle ORM join result keys use the SQL table name (first arg to `pgTable()`), NOT the JS variable name.
+  - All DB-querying Server Component pages need `export const dynamic = "force-dynamic"` to prevent build-time prerender failures when `DATABASE_URL` is absent.

@@ -158,6 +158,50 @@ export async function listPromptHistory(
   return rows as Prompt[];
 }
 
+
+export type PromptKeySummary = {
+  name: string;
+  promptType: PromptType;
+  activeVersion: number | null;
+  totalVersions: number;
+  notes: string | null;
+};
+
+export async function listAllPromptKeys(): Promise<PromptKeySummary[]> {
+  const all = await listPrompts();
+  const map = new Map<string, PromptKeySummary>();
+  for (const row of all) {
+    const k = row.name + "::" + row.promptType;
+    if (!map.has(k)) {
+      map.set(k, { name: row.name, promptType: row.promptType, activeVersion: null, totalVersions: 0, notes: null });
+    }
+    const entry = map.get(k)!;
+    entry.totalVersions += 1;
+    if (row.isActive) { entry.activeVersion = row.version; entry.notes = row.notes; }
+  }
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getPromptByNameAndVersion(name: string, version: number): Promise<Prompt> {
+  const rows = await db.select().from(prompts)
+    .where(and(eq(prompts.name, name), eq(prompts.version, version))).limit(1);
+  if (rows.length === 0) throw new PromptNotFoundError(`No prompt found for name="${name}" version=${version}`);
+  return rows[0] as Prompt;
+}
+
+export async function getActivePromptByName(name: string): Promise<Prompt> {
+  const rows = await db.select().from(prompts)
+    .where(and(eq(prompts.name, name), eq(prompts.isActive, true))).limit(1);
+  if (rows.length === 0) throw new PromptNotFoundError(`No active prompt found for name="${name}"`);
+  return rows[0] as Prompt;
+}
+
+export async function listPromptHistoryByName(name: string): Promise<Prompt[]> {
+  const rows = await db.select().from(prompts)
+    .where(eq(prompts.name, name)).orderBy(desc(prompts.version));
+  return rows as Prompt[];
+}
+
 // ── Writes ────────────────────────────────────────────────────────────────────
 
 /**

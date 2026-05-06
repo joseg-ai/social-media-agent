@@ -17,3 +17,14 @@
 - **Status:** Tank delivered WI-01 foundation. PR #3 under review by Switch.
 - **Your unblock:** Once PR #3 merges, you are unblocked for **WI-13** (async job submission framework).
 - **Dependency:** WI-01 establishes env schema, Drizzle ORM, and async job infrastructure.
+
+### 2026-05-05 — WI-15 Feed Management Dashboard UI — PR #17
+
+- **Branch:** `squad/wi-15-feeds-ui` → PR #17 (base: main)
+- **Route structure:** `(dashboard)/` layout group; `NAV_LINKS` array at top of `layout.tsx` for easy 3-way merge with parallel agents
+- **DB access pattern:** Server Components call service functions directly; client components mutate via REST API
+- **force-dynamic:** All DB-calling Server Components need `export const dynamic = "force-dynamic"` — otherwise Next.js 15 prerender fails at build time
+- **Drizzle join key gotcha:** Drizzle returns join results keyed by the DB table name string (`feed_sources`), NOT the JS variable name (`feedSources`). Fixed pre-existing bug in `queries.ts`.
+- **409 UX:** DELETE `FeedSourceHasPostsError` renders as inline error row with post count (no modal needed)
+- **Windows build workaround:** `npx next build` fails with `ENOENT: rename .next/export/500.html` on Next.js 15.5.3. Fix: pre-create `.next/export/` before running build.
+- **Shared working directory:** Stage only your own files — other agents' untracked files appear in `src/` but must not be staged.

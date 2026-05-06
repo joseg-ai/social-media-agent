@@ -131,6 +131,16 @@
 - **Lint/Build:** Lint exit 0. Compile + type-check + 12/12 static pages clean. Turbopack ENOENT pre-existing on main. ✅
 - **Side-effect for PR #18:** `layout.tsx` now on main — WI-17 layout.tsx blocker resolved; Oracle should rebase.
 - **Decision file:** `.squad/decisions/inbox/switch-pr-17-wi-15.md`
+### 2026-05-06 — WI-14 Queue + History Dashboard PR #19 reviewed → REJECTED
+- **Status:** REJECTED. Two blockers; do not merge.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/19
+- **What was verified:** 3-table join in `queries.ts` ✅, Drizzle params (no raw SQL injection) ✅, char count uses `[...text].length` ✅, no markdown rendering (uses `<pre>`) ✅, `force-dynamic` on both pages ✅, pagination offset correct ✅, layout.tsx inherited from main (already has all 6 links) ✅, cross-territory scope clean ✅, lint exit 0 ✅, build exit 0 (13 routes) ✅.
+- **Blockers:**
+  - HIGH (`src/app/api/posts/[id]/approve/route.ts`): `POST /api/posts/[id]/approve` uses raw `db.update()` instead of `approveDraft()` from state-machine.ts. WI-11 is on main; `TODO(WI-11)` fallback must be gone. Additionally, the raw UPDATE has no `AND state = 'draft'` in its WHERE clause — two concurrent approvals can both succeed (non-atomic TOCTOU). `approveDraft()` uses a conditional UPDATE that prevents this. Also unconditionally sets `scheduledFor: new Date()`, bypassing the timing advisor.
+  - HIGH (`src/app/api/posts/[id]/route.ts`): `DELETE /api/posts/[id]` uses raw `db.update()` with no state check. Can force-cancel a `posting` post (mid-flight LinkedIn submission). `cancelPost()` rejects `posting→cancelled` (not in ALLOWED_TRANSITIONS) — that protection is intentional. Raw UPDATE bypasses it entirely: DB shows `cancelled` while LinkedIn may have successfully posted, leaving system inconsistent. Fix: call `cancelPost(id, reason)` and surface `InvalidStateTransitionError` as 409.
+- **Non-blocking note:** PATCH handler checks `state !== 'draft'` before UPDATE but UPDATE WHERE lacks `AND state = 'draft'` (TOCTOU on `editedText`). Non-blocking for single-user MVP since it only changes body text, not state.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-19-wi-14.md`
+
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.
 - **`gh pr review --approve` fails on self-owned PRs** — always fall back to `--comment` and record the verdict in the decisions inbox. This is a GitHub API constraint, not a workflow bug.

@@ -72,6 +72,16 @@
 - **Blocker found:** PR #12 (WI-09) merged into `main` before this PR. WI-09 included WI-07's `0001_article_status.sql` and `schema.ts` changes as a dependency. Merging WI-07's branch to current `main` will conflict on schema.ts (enum comment wording, index ordering) and the migration file (whitespace). **Oracle must rebase on main** — after rebase, the duplicate files vanish from the diff; only `src/lib/scoring/`, env.ts RELEVANCE_THRESHOLD remain.
 - **Minor notes:** `normaliseScore(1)` ambiguity for future integer prompts (documented, non-blocking), no status guard on direct `scoreArticle` calls (informational), `schemaDescription` system message says 0-100 while v1 prompt returns 0-1 (low risk).
 - **Decision file:** `.squad/decisions/inbox/switch-pr-15-wi-07.md`
+### 2026-05-06 — WI-11 Post State Machine PR #16 reviewed → APPROVED WITH NOTES
+- **Status:** APPROVED WITH NOTES. Tank's WI-11 state machine + scheduling integration is solid. Merged.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/16
+- **What was verified:** Transition allowlist (9 pairs complete, matches diagram ✅), race condition safety (conditional UPDATE atomic — traced 2-worker scenario, exactly 1 winner ✅), `claimReadyPosts` error handling (only `InvalidStateTransitionError` silently dropped, all others rethrown ✅), migration `0002` (additive only — `failure_count NOT NULL DEFAULT 0`, `cancel_reason TEXT NULL`, posts table only ✅), `markPosted` idempotency (second call → clean `InvalidStateTransitionError` ✅), `scheduleDraft` all 3 advisor outcomes (`post_now`/`schedule_for`/`skip` ✅), error class exports (both `InvalidStateTransitionError` and `NotImplementedError` exported from state-machine + index ✅), lint exit 0 ✅, TypeScript clean in Tank's files (4 tsc errors all in Trinity's untracked WI-14/WI-17 files) ✅.
+- **Issues found:**
+  - MEDIUM (`state-machine.ts:180`): `cancelPost()` JSDoc says "any non-terminal state → cancelled" but `posting→cancelled` is **not** in `ALLOWED_TRANSITIONS`. Calling `cancelPost()` on a `posting` post throws `InvalidStateTransitionError` immediately. Trinity's WI-14 DELETE handler swallows all errors from `cancelPost()` and falls through to a raw DB update — meaning a `posting` post gets force-cancelled bypassing the state machine. Docstring fix needed; transition logic itself is correct.
+  - INFO: `approveDraft()` without `schedule_for` leaves `scheduledFor=null`; SQL `lte(scheduledFor, now)` treats null as not-past, so these posts sit in `scheduled` state forever, silently never claimed. Documented in JSDoc but a silent failure mode.
+  - INFO: `scheduleDraft` is not idempotent — second call throws `InvalidStateTransitionError`. Not a bug, just undocumented behavior.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-16-wi-11.md`
+
 ### 2026-05-06 — WI-08 Timing Advisor PR #13 re-reviewed → APPROVED WITH NOTES
 - **Status:** APPROVED WITH NOTES. Tank fixed the original blocker (scalar key mismatch).
 - **PR link:** https://github.com/joseg-ai/social-media-agent/pull/13

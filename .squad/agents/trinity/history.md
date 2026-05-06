@@ -106,23 +106,17 @@
 - **Commit:** `c21c752`
 - **Gotcha:** Git working tree chaos from stash + wrong-branch checkout; had to manually reset `squad/wi-14-queue-history-ui` and re-apply changes cleanly on the correct branch
 
-### 2026-05-05 — WI-14 PR #19 submitted
-
-- **Branch:** `squad/wi-14-queue-history-ui` → PR #19 (base: main)
-- **Deliverables:**
-  - `src/lib/posts/queries.ts` — `listPosts()` / `getPost()` with posts→articles→feed_sources inner join; `PostRow` type with correct field names
-  - `GET /api/posts`, `GET/PATCH/DELETE /api/posts/[id]`, `POST /api/posts/[id]/approve`
-  - `/queue` page: Server Component, `force-dynamic`, `PostCard` + `EditDraftForm` client components
-  - `/history` page: Server Component, `force-dynamic`, 50-per-page pagination, `HistoryPostRow` read-only
-- **Schema facts learned:**
-  - `postStateEnum` values: `"draft"`, `"scheduled"`, `"posting"`, `"posted"`, `"failed"`, `"cancelled"` — NOT `"published"`
-  - Correct field names: `feedSourceName` (not `feedName`), `articleScore` (not `relevanceScore`), `articleScoreReason` (not `scoringReasoning`)
-  - Drizzle join result keyed by table name `feed_sources` (not the JS variable `feedSources`)
-- **WI-11 coordination:** Direct DB UPDATE used with `TODO(WI-11)` comments; swap for `approveDraft(id)` / `cancelPost(id, reason)` when Tank's WI-11 merges
-- **Build quirks:**
-  - `tsconfig.tsbuildinfo` + `.next/` stale cache causes tsc "file not found" errors even when files exist — always delete both before `npm run build`
-  - Turbopack `npm run build` intermittent ENOENT on Windows; retrying after cache clear resolves it
-  - Git branch (`.git/HEAD`) resets to `main` between PowerShell calls in this environment — always `git checkout BRANCH` at start of each call
-  - Files written to disk only persist across PowerShell calls if committed to git in the same call
-- **Char count:** Use `[...text].length` (spread to code points) not `.length` for accurate Unicode/emoji count against LinkedIn's 3000 char limit
-- **UX pattern:** `useTransition` + `router.refresh()` for optimistic UI; no additional state management library needed
+### 2026-05-07 — WI-14 PR #19 revision (Trinity-7 takes over from Trinity-4)
+- **Switch review addressed:** 2 High blockers fixed (lockout rule applied)
+- **Fix 1 (BLOCKER) — approve/route.ts:**
+  - Removed raw `db.update()` block, `eq`/`db`/`posts` imports, `getPost` post-update re-fetch, manual state check, `scheduledFor: new Date()` override, and TODO comment
+  - Now calls `await approveDraft(id)` from `@/lib/posts`; catches `InvalidStateTransitionError` -> 409 `"Post is not in draft state — cannot approve"`
+- **Fix 2 (BLOCKER) — route.ts DELETE:**
+  - Removed raw `db.update()` block and TODO comment
+  - Added `reason` validation: must be `string` <= 500 chars or absent (strict typeof check, not `String()` coercion)
+  - Now calls `await cancelPost(id, reason)` from `@/lib/posts`; catches `InvalidStateTransitionError` -> 409 `"Post is currently being submitted or already in a terminal state — cannot cancel"`
+- **Fix 3 (PATCH touch-up):** Already guarded `state !== 'draft'` -> 409 — no change needed
+- **`approveDraft` signature:** `approveDraft(postId, opts?: { schedule_for?: Date|string })` — returns `Post` directly; no `getPost` re-fetch needed
+- **`cancelPost` signature:** `cancelPost(postId, reason?: string)` — does its own SELECT for current state, then `transitionPost(fromState, "cancelled")`; throws `PostNotFoundError` if missing
+- **Commit:** `0a02146` on `squad/wi-14-queue-history-ui`
+- **Drizzle imports:** `eq`/`db`/`posts` still needed in route.ts for the PATCH handler — do NOT remove them

@@ -7,6 +7,21 @@
 
 ## Learnings
 
+### 2026-05-06 — WI-16 prompt editor PR #20 re-reviewed → APPROVED (Wave 4 batch-2 complete)
+
+- **Status:** APPROVED. Squash merged, branch deleted.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/20
+- **Context:** PR was previously REJECTED (2 blockers). Trinity-10 revised; this is the re-review after revision.
+- **Both blockers verified fixed:**
+  1. **Race condition:** `MAX(version)` now computed via `tx.select()` inside `db.transaction()`. Unique index `prompts_name_type_version_uidx` added to schema + `0004_prompts_version_uidx.sql` migration. Bounded retry loop (3 attempts max) on Postgres `23505`.
+  2. **Content cap:** `content.length > 100_000` returns 400. All prior validations preserved.
+- **Migration numbers:** 0003 = oauth_person_urn (Tank's WI-12), 0004 = prompts_version_uidx. No collision.
+- **Rebase:** Clean on main, force-pushed before merge.
+- **CI:** lint exit 0, 15/15 vitest tests pass, build exit 0.
+- **Scope:** Clean — only prompts-related files + squad history. No touches to other agents' files.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-20-wi-16-approved.md`
+- **Wave 4 batch-2 complete:** WI-12, WI-16, WI-21, WI-23 all in main. Only WI-20 (E2E) and WI-22 (Azure deploy) remain.
+
 ### 2026-05-06 — WI-21 NBSP snapshot tests PR #22 reviewed → APPROVED
 
 - **Status:** APPROVED. Merged via squash.

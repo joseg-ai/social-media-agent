@@ -5,10 +5,15 @@ import { SESSION_COOKIE, verifySessionToken, getSessionSecret } from "@/lib/auth
  * Paths that bypass authentication.
  * - /login          — the login page itself
  * - /api/auth/*     — login + logout API routes
+ * - /api/health     — Azure load balancer + uptime monitor probe (no auth)
  * All other paths are gated.
  */
 function isPublicPath(pathname: string): boolean {
-  return pathname === "/login" || pathname.startsWith("/api/auth/");
+  return (
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname === "/api/health"
+  );
 }
 
 export async function middleware(request: NextRequest): Promise<NextResponse> {

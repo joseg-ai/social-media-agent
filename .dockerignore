@@ -1,0 +1,15 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log*
+.env*
+!.env.example
+docker-compose.yml
+workspace
+coverage
+*.tsbuildinfo
+.squad/.scratch
+.squad/log
+.squad/sessions
+.squad/orchestration-log

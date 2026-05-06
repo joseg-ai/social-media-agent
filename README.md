@@ -22,6 +22,25 @@ npm test
 npm run test:watch
 ```
 
+### E2E integration tests (`tests/e2e/`)
+
+The `full-pipeline.test.ts` test drives the complete feed-poll → score → draft → schedule → publish pipeline against a **real Postgres database** with the LLM and LinkedIn API mocked at their network boundaries.
+
+**Requirements:**
+
+- A running Postgres instance accessible via `DATABASE_URL`
+- The test automatically creates a clean schema and runs all migrations before the suite
+
+**Run the E2E tests:**
+
+```bash
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sma_test npm test
+```
+
+**Skip behaviour:** If `DATABASE_URL` is not set the E2E suite is skipped with a clear console message and `npm test` exits 0. Unit/snapshot tests are unaffected.
+
+> **Note:** The E2E suite takes longer than unit tests (~5–15 seconds depending on your Postgres setup). It runs sequentially (not `concurrent`) to avoid schema-state conflicts between test cases.
+
 Smoke tests (require DB + LLM env vars) are separate scripts under `src/lib/*/`.  
 See each file's header comment for usage instructions.
 

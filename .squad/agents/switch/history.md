@@ -107,6 +107,18 @@
 - **Decision file:** `.squad/decisions/inbox/switch-pr-13-rereview.md`
 
 
+### 2026-05-06 — WI-17 Token Usage Dashboard PR #18 re-reviewed → APPROVED + MERGED
+- **Status:** APPROVED. Both blockers from first review fully addressed. Rebase performed; squash-merged to main.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/18
+- **Fixes verified:**
+  1. **Layout blocker (HIGH):** PR #17 (WI-15) merged at `bd2be33`. `src/app/(dashboard)/layout.tsx` present on main. Rebased `squad/wi-17-usage-ui` onto `origin/main` — clean, zero conflicts. `NAV_LINKS` in rebased layout.tsx: Feeds ✅ + Usage ✅ (both present; inherited from WI-15, WI-17 doesn't touch the file).
+  2. **Pricing mismatch (MEDIUM):** `pricing.ts` revised in commit `c21c752`. JSDoc on `PRICING_USD_PER_1K_TOKENS` and `estimateCostUsd()` both document that `llm_calls.model` = `env.AZURE_OPENAI_DEPLOYMENT` (deployment slug, not canonical name) ✅. Three Claude entries removed ✅. `DEFAULT_PRICING` relabeled as "conservative fallback for unknown slugs" at `{ prompt: 0.005, completion: 0.015 }` — higher than any named rate, intentionally errs toward over-reporting ✅.
+- **Scope (post-rebase diff vs main):** `src/app/(dashboard)/usage/page.tsx`, `src/app/api/usage/route.ts`, `src/lib/llm/pricing.ts`, `src/lib/llm/usage.ts`, `src/lib/llm/index.ts`, `.squad/agents/trinity/history.md`. No foreign-agent files. ✅
+- **Lint:** Exit 0 (pre-existing `_post` unused-var warning in `publisher.ts` — not from this PR). ✅
+- **Build (`SKIP_ENV_VALIDATION=1`):** `/usage` and `/api/usage` both appear as dynamic routes in manifest. 13/13 static pages. Clean. ✅
+- **Side-effect note:** WI-14 (`squad/wi-14-queue-history-ui`) has its own layout.tsx diverged from main; Trinity-4 must rebase that branch onto main (now at `2a48398`) before its PR merges.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-18-wi-17-approved.md`
+
 ### 2026-05-06 — WI-15 Feed Management UI PR #17 re-reviewed → APPROVED + MERGED
 - **Status:** APPROVED. All 3 blockers from first review addressed. Squash-merged to main.
 - **PR link:** https://github.com/joseg-ai/social-media-agent/pull/17

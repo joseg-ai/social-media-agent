@@ -67,6 +67,25 @@ export interface BatchResult {
 
 // -- Helpers ------------------------------------------------------------------
 
+/**
+ * Read relevance_threshold from the settings table.
+ * Falls back to env.RELEVANCE_THRESHOLD (default 70) if the DB row doesn't exist.
+ */
+export async function getRelevanceThreshold(): Promise<number> {
+  const rows = await db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(eq(settings.key, "relevance_threshold"))
+    .limit(1);
+
+  if (rows.length > 0) {
+    const parsed = Number(rows[0].value);
+    if (Number.isFinite(parsed) && parsed >= 0 && parsed <= 100) return parsed;
+  }
+
+  return env.RELEVANCE_THRESHOLD;
+}
+
 /** Read master_context from the settings table; falls back to "" with a warning. */
 async function getMasterContext(): Promise<string> {
   const rows = await db
@@ -158,7 +177,7 @@ export async function scoreArticle(articleId: string): Promise<ScoreResult> {
   // 6. Normalise score to 0-100
   const score = normaliseScore(llmData.score);
   const reason = llmData.reasoning ?? llmData.reason ?? "";
-  const threshold = env.RELEVANCE_THRESHOLD;
+  const threshold = await getRelevanceThreshold();
   const status: "scored" | "rejected" = score >= threshold ? "scored" : "rejected";
 
   // 7. Persist result

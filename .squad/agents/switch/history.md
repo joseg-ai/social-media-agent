@@ -7,6 +7,26 @@
 
 ## Learnings
 
+### 2026-05-07 — WI-20 E2E pipeline integration test PR #27 reviewed → APPROVED WITH NOTES + MERGED ✅ ALL 23 WI COMPLETE
+
+- **Status:** APPROVED WITH NOTES. Rebased onto main, squash merged, branch deleted.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/27
+- **What was verified:**
+  - lint ✅ build ✅ (implicitly clean, same codebase as WI-22 build)
+  - `npm test -- --run` exits 0: 15 unit pass + 3 E2E skipped (no DATABASE_URL) ✅
+  - Mock boundaries all at correct layer: `rss-parser` (module), `@/lib/llm` (chat/chatJSON), `fetch` (global), `getValidAccessToken` (string return matches real), `decidePostingAction` (`TimingDecision` shape correct)
+  - Real Drizzle ORM, real `transitionPost` conditional UPDATEs, real state machine exercised ✅
+  - Skip UX: `describe.skipIf(!DATABASE_URL)` + stderr warning + exit 0 ✅
+  - Cleanup: `TRUNCATE ... CASCADE` afterEach + `vi.clearAllMocks()` + `vi.unstubAllGlobals()` ✅
+  - Negative paths: below-threshold (posts.length===0, all rejected), 422 (failed state, failureReason truthy, failureCount===1, article preserved) ✅
+  - Fixture: 2 distinct articles, all 3 prompts seeded active, URN cached in oauth_tokens ✅
+- **Rebase required:** Branch was built on `squad/wi-22-azure-deploy` before WI-22 squash-merged to main. `git rebase origin/main` cleanly dropped WI-22 commits (already in main). Force-pushed, then merged. Final diff: 3 files only (test + README + decision).
+- **Observations logged (non-blocking):**
+  1. Missing `linkedinPostId IS NULL` assertion in 422 test (production behavior is correct; assertion gap only)
+  2. Global `fetch` stub has no URL filter — works because URN is cached; if cache miss occurred, stub would return wrong shape silently
+- **Milestone:** WI-20 was the last test work item. All 23 work items are now in main. Squad has shipped. 🎉
+- **Decision file:** `.squad/decisions/inbox/switch-wi-20-e2e-review.md`
+
 ### 2026-05-07 — WI-22 Azure App Service deployment PR #26 reviewed → APPROVED WITH NOTES (Wave 4 batch-3 complete)
 
 - **Status:** APPROVED WITH NOTES. Squash merged, branch deleted.

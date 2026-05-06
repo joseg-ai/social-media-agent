@@ -49,3 +49,13 @@
   - `git checkout <branch>` does NOT always switch the active branch when HEAD is detached or another agent switches it concurrently. Always verify with `git branch --show-current` after each checkout.
   - Drizzle ORM join result keys use the SQL table name (first arg to `pgTable()`), NOT the JS variable name.
   - All DB-querying Server Component pages need `export const dynamic = "force-dynamic"` to prevent build-time prerender failures when `DATABASE_URL` is absent.
+
+### 2026-05-06 — WI-17 PR #18 revision (Trinity-6 takes over from Trinity-3)
+- **Switch review addressed:** Issue 2 only (Issue 1 resolves when PR #17 merges)
+- **Fix (BLOCKER):** `src/lib/llm/pricing.ts` — pricing key mismatch with Azure deployment names
+  - Added prominent JSDoc on `PRICING_USD_PER_1K_TOKENS` and `estimateCostUsd()` documenting that `llm_calls.model` is set from `env.AZURE_OPENAI_DEPLOYMENT` (the deployment slug, not the canonical OpenAI model name), and fallback behavior
+  - Removed dead Claude entries (`claude-sonnet-4.6`, `claude-haiku-4.5`, `claude-opus-4.5`) — all calls route through Azure OpenAI which doesn't serve Claude
+  - Fixed `DEFAULT_PRICING`: dropped misleading "GPT-4o rates" claim, relabeled as conservative fallback for unknown slugs, raised to `{ prompt: 0.005, completion: 0.015 }` so unknown models err toward over-reporting cost
+- **Branch:** `squad/wi-17-usage-ui` → PR #18 (base: squad/wi-15-feeds-ui)
+- **Commit:** `c21c752`
+- **Gotcha:** Git working tree chaos from stash + wrong-branch checkout; had to manually reset `squad/wi-14-queue-history-ui` and re-apply changes cleanly on the correct branch

@@ -21,7 +21,7 @@
  *   const text   = renderPrompt(prompt, { master_context: "...", article_title: "..." });
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, prompts } from "@/db";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -158,7 +158,60 @@ export async function listPromptHistory(
   return rows as Prompt[];
 }
 
+
+export type PromptKeySummary = {
+  name: string;
+  promptType: PromptType;
+  activeVersion: number | null;
+  totalVersions: number;
+  notes: string | null;
+};
+
+export async function listAllPromptKeys(): Promise<PromptKeySummary[]> {
+  const all = await listPrompts();
+  const map = new Map<string, PromptKeySummary>();
+  for (const row of all) {
+    const k = row.name + "::" + row.promptType;
+    if (!map.has(k)) {
+      map.set(k, { name: row.name, promptType: row.promptType, activeVersion: null, totalVersions: 0, notes: null });
+    }
+    const entry = map.get(k)!;
+    entry.totalVersions += 1;
+    if (row.isActive) { entry.activeVersion = row.version; entry.notes = row.notes; }
+  }
+  return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export async function getPromptByNameAndVersion(name: string, version: number): Promise<Prompt> {
+  const rows = await db.select().from(prompts)
+    .where(and(eq(prompts.name, name), eq(prompts.version, version))).limit(1);
+  if (rows.length === 0) throw new PromptNotFoundError(`No prompt found for name="${name}" version=${version}`);
+  return rows[0] as Prompt;
+}
+
+export async function getActivePromptByName(name: string): Promise<Prompt> {
+  const rows = await db.select().from(prompts)
+    .where(and(eq(prompts.name, name), eq(prompts.isActive, true))).limit(1);
+  if (rows.length === 0) throw new PromptNotFoundError(`No active prompt found for name="${name}"`);
+  return rows[0] as Prompt;
+}
+
+export async function listPromptHistoryByName(name: string): Promise<Prompt[]> {
+  const rows = await db.select().from(prompts)
+    .where(eq(prompts.name, name)).orderBy(desc(prompts.version));
+  return rows as Prompt[];
+}
+
 // ── Writes ────────────────────────────────────────────────────────────────────
+
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "23505"
+  );
+}
 
 /**
  * Create a new version for a prompt key.
@@ -177,37 +230,51 @@ export async function createPromptVersion(
 ): Promise<Prompt> {
   const { name, promptType, content, notes, activate = true } = input;
 
-  const history = await listPromptHistory(name, promptType);
-  const nextVersion = history.length > 0 ? history[0].version + 1 : 1;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.transaction(async (tx) => {
+        const [maxRow] = await tx
+          .select({ max: sql<number>`COALESCE(MAX(${prompts.version}), 0)` })
+          .from(prompts)
+          .where(
+            and(eq(prompts.name, name), eq(prompts.promptType, promptType))
+          );
+        const nextVersion = (maxRow?.max ?? 0) + 1;
 
-  return db.transaction(async (tx) => {
-    if (activate && history.length > 0) {
-      await tx
-        .update(prompts)
-        .set({ isActive: false })
-        .where(
-          and(
-            eq(prompts.name, name),
-            eq(prompts.promptType, promptType),
-            eq(prompts.isActive, true)
-          )
-        );
+        if (activate) {
+          await tx
+            .update(prompts)
+            .set({ isActive: false })
+            .where(
+              and(
+                eq(prompts.name, name),
+                eq(prompts.promptType, promptType),
+                eq(prompts.isActive, true)
+              )
+            );
+        }
+
+        const [created] = await tx
+          .insert(prompts)
+          .values({
+            name,
+            promptType,
+            content,
+            version: nextVersion,
+            isActive: activate,
+            notes: notes ?? null,
+          })
+          .returning();
+
+        return created as Prompt;
+      });
+    } catch (err) {
+      if (isUniqueViolation(err) && attempt < 2) continue;
+      throw err;
     }
+  }
 
-    const [created] = await tx
-      .insert(prompts)
-      .values({
-        name,
-        promptType,
-        content,
-        version: nextVersion,
-        isActive: activate,
-        notes: notes ?? null,
-      })
-      .returning();
-
-    return created as Prompt;
-  });
+  throw new Error("createPromptVersion: exhausted retries on version race");
 }
 
 /**

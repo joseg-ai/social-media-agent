@@ -20,7 +20,7 @@
 export { getLLMClient, resetLLMClient } from "./client";
 export { chat, chatStream, chatJSON } from "./chat";
 export { AppError, normalizeLLMError } from "./errors";
-export { getUsageInRange, getTotalTokensInRange } from "./usage";
+export { getUsageInRange, getTotalTokensInRange, listRecentCalls } from "./usage";
 
 export type { LLMErrorCategory } from "./errors";
 export type {
@@ -30,3 +30,4 @@ export type {
   UsageLogEntry,
 } from "./chat";
 export type { LlmCallRow, TokenTotals } from "./usage";
+export { estimateCostUsd, PRICING_USD_PER_1K_TOKENS, DEFAULT_PRICING } from "./pricing";

@@ -264,6 +264,12 @@ export const oauthTokens = pgTable(
     keyVersion: integer("key_version").notNull().default(1),
     scope: text("scope"),
     expiresAt: timestamp("expires_at", { withTimezone: true }),
+    /**
+     * Cached LinkedIn person URN (e.g. "urn:li:person:AbCdEfGhIj").
+     * Populated on first UGC post attempt (WI-12) via the userinfo endpoint.
+     * Avoids repeated /v2/userinfo round-trips on every publish run.
+     */
+    linkedinPersonUrn: text("linkedin_person_urn"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

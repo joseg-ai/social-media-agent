@@ -106,6 +106,19 @@
   - N3: `daysUntilNext` exits at 8 if all days invalid (malformed data only)
 - **Decision file:** `.squad/decisions/inbox/switch-pr-13-rereview.md`
 
+
+### 2026-05-06 — WI-15 Feed Management UI PR #17 re-reviewed → APPROVED + MERGED
+- **Status:** APPROVED. All 3 blockers from first review addressed. Squash-merged to main.
+- **PR link:** https://github.com/joseg-ai/social-media-agent/pull/17
+- **Fixes verified:**
+  1. `src/lib/posts/queries.ts` absent from diff. ✅
+  2. `FeedRow.tsx handleToggle` — `res.ok` check, `setToggleError` inline, `router.refresh()` on success only, try/catch for network errors, `finally` clears pending. Mirrors `handleDelete`. ✅
+  3. `AddFeedForm.tsx` — `new URL(url).hostname` inside try block; `finally { setLoading(false) }` covers all throw paths. ✅
+- **Scope:** 8 files — feeds/, layout.tsx, page.tsx (redirect). No foreign-agent territory. ✅
+- **NAV_LINKS:** Single private const, `as const`. Merge-friendly. ✅
+- **Lint/Build:** Lint exit 0. Compile + type-check + 12/12 static pages clean. Turbopack ENOENT pre-existing on main. ✅
+- **Side-effect for PR #18:** `layout.tsx` now on main — WI-17 layout.tsx blocker resolved; Oracle should rebase.
+- **Decision file:** `.squad/decisions/inbox/switch-pr-17-wi-15.md`
 ### 2026-05-05 — Foundation PR review heuristics
 - **Run env.ts directly with node** to verify fail-fast behavior — don't just read the code. `node` on a TS file with ESM syntax works with a warning but actually throws the right error.
 - **`gh pr review --approve` fails on self-owned PRs** — always fall back to `--comment` and record the verdict in the decisions inbox. This is a GitHub API constraint, not a workflow bug.

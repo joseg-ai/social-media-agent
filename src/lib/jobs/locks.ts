@@ -4,10 +4,16 @@
  * Uses session-level pg_try_advisory_lock so that only one instance of a job
  * runs at a time across multiple app instances sharing the same database.
  *
- * Connection safety: acquires a reserved connection from the pool so that both
- * the lock acquisition and the release happen on the exact same Postgres session.
- * Advisory locks are per-session in Postgres — mixing connections would silently
- * skip the unlock.
+ * ── Registered lock keys ──────────────────────────────────────────────────────
+ *
+ * Lock keys are derived from the job name via jobLockKey() (SHA-256, 60-bit).
+ *
+ *   Job name           SHA-256 key
+ *   ─────────────────  ──────────────────────────────────────────
+ *   "feed-poll"        jobLockKey("feed-poll")      — WI-06
+ *   "post-publisher"   jobLockKey("post-publisher") — WI-12
+ *
+ * To add a new job: pick a unique name in its registerXxxJob() function.
  */
 import { createHash } from "crypto";
 import { db } from "@/db";

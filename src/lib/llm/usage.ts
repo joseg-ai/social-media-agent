@@ -4,7 +4,7 @@
  */
 import { db } from "@/db";
 import { llmCalls } from "@/db/schema";
-import { and, gte, lte, sum, count } from "drizzle-orm";
+import { and, gte, lte, sum, count, desc } from "drizzle-orm";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -74,4 +74,24 @@ export async function getTotalTokensInRange(
     total: Number(row?.total ?? 0),
     calls: Number(row?.calls ?? 0),
   };
+}
+
+/**
+ * Return the N most-recent llm_calls rows, newest first.
+ * Used by the /usage dashboard to show the recent calls table.
+ */
+export async function listRecentCalls(limit = 50): Promise<LlmCallRow[]> {
+  return db
+    .select({
+      id: llmCalls.id,
+      model: llmCalls.model,
+      promptTokens: llmCalls.promptTokens,
+      completionTokens: llmCalls.completionTokens,
+      totalTokens: llmCalls.totalTokens,
+      durationMs: llmCalls.durationMs,
+      createdAt: llmCalls.createdAt,
+    })
+    .from(llmCalls)
+    .orderBy(desc(llmCalls.createdAt))
+    .limit(limit);
 }

@@ -147,3 +147,23 @@
 - **Git HEAD reset:** `.git/HEAD` resets to `main` (or another agent branch) between PowerShell calls in this shared environment. Always verify with `git branch --show-current` at the start of each call.
 
 - **Staging in shared workspace:** After `git stash pop`, other agents modified tracked files appear unstaged. Run `git diff --cached --name-only` and `git restore --staged <file>` for any non-WI-16 files before committing.
+
+### 2026-05-XX — WI-16 PR #20 revision (Trinity-10): Switch review blockers addressed
+
+- **Blocker 1 (race condition):** `createPromptVersion` computed `MAX(version)` outside the DB transaction — concurrent saves could produce duplicate versions.
+  - Fix: moved `MAX(version)` inside `db.transaction()` using `sql<number>\`COALESCE(MAX(${prompts.version}), 0)\`` Drizzle raw query.
+  - Added `uniqueIndex("prompts_name_type_version_uidx").on(t.name, t.promptType, t.version)` in `schema.ts` as DB-level backstop.
+  - Wrapped insert in retry loop (3 attempts): on Postgres unique violation (pg error code `23505`) retry with a fresh MAX query. After 3 retries: throw `"Failed to save prompt version after 3 attempts (concurrent conflict)"`.
+  - Added `isUniqueViolation(e)` helper: checks `e instanceof Error && "code" in e && (e as {code:string}).code === "23505"`.
+  - Migration: manually created `0004_prompts_version_uidx.sql` with `CREATE UNIQUE INDEX ... ON "prompts" USING btree ("name","prompt_type","version")`. **Had to create manually** because `drizzle-kit generate` used the snapshot (only `0000_parallel_junta`) and generated a migration containing all 3 pending changes since 0000, not just the new index.
+
+- **Blocker 2 (unbounded POST content):** POST `/api/prompts/[key]` accepted arbitrarily large content.
+  - Fix: added `if (content.length > 100_000) return NextResponse.json(...)` 400 check after the existing trim check in `route.ts`.
+
+- **PowerShell here-string rule (CRITICAL):** `@"..."@` double-quoted here-strings expand `$variable` and treat backtick as escape — TypeScript template literals like `${prompts.version}` silently become empty strings. Always write TS files containing `${...}` or backticks using **Python script files on disk** (`pathlib.Path(...).write_text()`), never inline PowerShell here-strings.
+
+- **`edit` tool on wrong branch state:** In this shared environment, `edit` tool edits applied to a file may be lost if a subsequent PowerShell shell checks out a different branch first (git restores the committed version). Python scripts that write directly to disk via absolute path are more resilient.
+
+- **Drizzle journal stale state (pre-existing):** `meta/_journal.json` only tracked `0000_parallel_junta` even though `0001`–`0003` SQL files existed on the branch. `drizzle-kit generate` uses the snapshot, not SQL filenames. Creating migrations manually with just the needed DDL is the correct workaround when the journal is out of sync.
+
+- **Commit:** `16ce38c` on `squad/wi-16-prompt-editor`

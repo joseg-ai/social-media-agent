@@ -80,3 +80,28 @@
   - Files written to disk only persist across PowerShell calls if committed to git in the same call
 - **Char count:** Use `[...text].length` (spread to code points) not `.length` for accurate Unicode/emoji count against LinkedIn's 3000 char limit
 - **UX pattern:** `useTransition` + `router.refresh()` for optimistic UI; no additional state management library needed
+### 2026-05-05 — WI-17 token/cost dashboard: PR #18 open
+
+- **WI-17 status:** PR #18 open (`squad/wi-17-usage-ui` → main)
+- **Files shipped:**
+  - `src/lib/llm/pricing.ts` — pricing table + `estimateCostUsd()`
+  - `src/lib/llm/usage.ts` — added `listRecentCalls(limit)` function
+  - `src/lib/llm/index.ts` — re-exported new functions + pricing
+  - `src/app/api/usage/route.ts` — `GET /api/usage?range=today|7d|30d|month`
+  - `src/app/(dashboard)/usage/page.tsx` — full dashboard (metrics, bar chart, tables)
+- **Layout dependency:** WI-15 PR adds `(dashboard)/layout.tsx` with Usage nav link; WI-17 page depends on it merging first (or simultaneously).
+- **Shared workspace lessons:**
+  - Multiple agents share one working directory → untracked files from other agents bleed into builds.
+  - `git checkout <branch>` does NOT always switch the active branch when HEAD is detached or another agent switches it concurrently. Always verify with `git branch --show-current` after each checkout.
+  - Drizzle ORM join result keys use the SQL table name (first arg to `pgTable()`), NOT the JS variable name.
+  - All DB-querying Server Component pages need `export const dynamic = "force-dynamic"` to prevent build-time prerender failures when `DATABASE_URL` is absent.
+
+### 2026-05-06 — WI-17 PR #18 revision (Trinity-6 takes over from Trinity-3)
+- **Switch review addressed:** Issue 2 only (Issue 1 resolves when PR #17 merges)
+- **Fix (BLOCKER):** `src/lib/llm/pricing.ts` — pricing key mismatch with Azure deployment names
+  - Added prominent JSDoc on `PRICING_USD_PER_1K_TOKENS` and `estimateCostUsd()` documenting that `llm_calls.model` is set from `env.AZURE_OPENAI_DEPLOYMENT` (the deployment slug, not the canonical OpenAI model name), and fallback behavior
+  - Removed dead Claude entries (`claude-sonnet-4.6`, `claude-haiku-4.5`, `claude-opus-4.5`) — all calls route through Azure OpenAI which doesn't serve Claude
+  - Fixed `DEFAULT_PRICING`: dropped misleading "GPT-4o rates" claim, relabeled as conservative fallback for unknown slugs, raised to `{ prompt: 0.005, completion: 0.015 }` so unknown models err toward over-reporting cost
+- **Branch:** `squad/wi-17-usage-ui` → PR #18 (base: squad/wi-15-feeds-ui)
+- **Commit:** `c21c752`
+- **Gotcha:** Git working tree chaos from stash + wrong-branch checkout; had to manually reset `squad/wi-14-queue-history-ui` and re-apply changes cleanly on the correct branch

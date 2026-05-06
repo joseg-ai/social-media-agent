@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { posts } from "@/db/schema";
 import { getPost } from "@/lib/posts/queries";
+import { cancelPost, InvalidStateTransitionError } from "@/lib/posts";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -46,8 +47,6 @@ export async function PATCH(request: NextRequest, { params }: RouteContext): Pro
 
 /**
  * DELETE /api/posts/[id] — cancel a post.
- * TODO(WI-11): Replace direct DB update with cancelPost(id, reason) from
- * src/lib/posts/state-machine.ts once Tank'\''s WI-11 lands.
  */
 export async function DELETE(request: NextRequest, { params }: RouteContext): Promise<NextResponse> {
   const { id } = await params;
@@ -55,16 +54,28 @@ export async function DELETE(request: NextRequest, { params }: RouteContext): Pr
   try {
     const rawBody = await request.json();
     if (typeof rawBody === "object" && rawBody !== null && "reason" in rawBody) {
-      reason = String((rawBody as { reason: unknown }).reason);
+      const raw = (rawBody as { reason: unknown }).reason;
+      if (typeof raw !== "string") {
+        return NextResponse.json({ error: "reason must be a string" }, { status: 400 });
+      }
+      if (raw.length > 500) {
+        return NextResponse.json({ error: "reason must be 500 characters or fewer" }, { status: 400 });
+      }
+      reason = raw;
     }
   } catch { /* no body is fine */ }
   try {
     const existing = await getPost(id);
     if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-    // TODO(WI-11): replace with cancelPost(id, reason)
-    await db.update(posts).set({ state: "cancelled", failureReason: reason ?? null, updatedAt: new Date() }).where(eq(posts.id, id));
+    await cancelPost(id, reason);
     return new NextResponse(null, { status: 204 });
   } catch (err) {
+    if (err instanceof InvalidStateTransitionError) {
+      return NextResponse.json(
+        { error: "Post is currently being submitted or already in a terminal state — cannot cancel" },
+        { status: 409 },
+      );
+    }
     console.error(`[DELETE /api/posts/${id}]`, err);
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });
   }

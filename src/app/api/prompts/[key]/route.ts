@@ -64,6 +64,10 @@ export async function POST(request: NextRequest, { params }: Params): Promise<Ne
     return NextResponse.json({ error: "content must not be empty" }, { status: 400 });
   }
 
+  if (content.length > 100_000) {
+    return NextResponse.json({ error: "content exceeds 100,000 character limit" }, { status: 400 });
+  }
+
   if (notes !== undefined && typeof notes !== "string") {
     return NextResponse.json({ error: "notes must be a string if provided" }, { status: 400 });
   }

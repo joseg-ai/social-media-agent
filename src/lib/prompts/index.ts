@@ -21,7 +21,7 @@
  *   const text   = renderPrompt(prompt, { master_context: "...", article_title: "..." });
  */
 
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, prompts } from "@/db";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -204,6 +204,15 @@ export async function listPromptHistoryByName(name: string): Promise<Prompt[]> {
 
 // ── Writes ────────────────────────────────────────────────────────────────────
 
+function isUniqueViolation(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code: unknown }).code === "23505"
+  );
+}
+
 /**
  * Create a new version for a prompt key.
  *
@@ -221,37 +230,51 @@ export async function createPromptVersion(
 ): Promise<Prompt> {
   const { name, promptType, content, notes, activate = true } = input;
 
-  const history = await listPromptHistory(name, promptType);
-  const nextVersion = history.length > 0 ? history[0].version + 1 : 1;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await db.transaction(async (tx) => {
+        const [maxRow] = await tx
+          .select({ max: sql<number>`COALESCE(MAX(${prompts.version}), 0)` })
+          .from(prompts)
+          .where(
+            and(eq(prompts.name, name), eq(prompts.promptType, promptType))
+          );
+        const nextVersion = (maxRow?.max ?? 0) + 1;
 
-  return db.transaction(async (tx) => {
-    if (activate && history.length > 0) {
-      await tx
-        .update(prompts)
-        .set({ isActive: false })
-        .where(
-          and(
-            eq(prompts.name, name),
-            eq(prompts.promptType, promptType),
-            eq(prompts.isActive, true)
-          )
-        );
+        if (activate) {
+          await tx
+            .update(prompts)
+            .set({ isActive: false })
+            .where(
+              and(
+                eq(prompts.name, name),
+                eq(prompts.promptType, promptType),
+                eq(prompts.isActive, true)
+              )
+            );
+        }
+
+        const [created] = await tx
+          .insert(prompts)
+          .values({
+            name,
+            promptType,
+            content,
+            version: nextVersion,
+            isActive: activate,
+            notes: notes ?? null,
+          })
+          .returning();
+
+        return created as Prompt;
+      });
+    } catch (err) {
+      if (isUniqueViolation(err) && attempt < 2) continue;
+      throw err;
     }
+  }
 
-    const [created] = await tx
-      .insert(prompts)
-      .values({
-        name,
-        promptType,
-        content,
-        version: nextVersion,
-        isActive: activate,
-        notes: notes ?? null,
-      })
-      .returning();
-
-    return created as Prompt;
-  });
+  throw new Error("createPromptVersion: exhausted retries on version race");
 }
 
 /**

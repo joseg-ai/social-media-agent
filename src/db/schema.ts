@@ -17,6 +17,7 @@ import {
   varchar,
   unique,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 // ── Enums ──────────────────────────────────────────────────────────────────────
@@ -191,6 +192,7 @@ export const prompts = pgTable(
   (t) => [
     index("prompts_name_type_idx").on(t.name, t.promptType),
     index("prompts_type_active_idx").on(t.promptType, t.isActive),
+    uniqueIndex("prompts_name_type_version_uidx").on(t.name, t.promptType, t.version),
   ],
 );
 
